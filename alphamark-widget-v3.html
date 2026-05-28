@@ -1,0 +1,1111 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>AlphaMark - AI Skin Advisor</title>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+:root{
+  --brand:#1B4332;
+  --brand2:#2D6A4F;
+  --accent:#95D5B2;
+  --accent2:#B7E4C7;
+  --gold:#C9A84C;
+  --bg:#FAFAF8;
+  --white:#FFFFFF;
+  --text:#111311;
+  --text2:#4A4A4A;
+  --text3:#9A9A9A;
+  --border:#E8E8E4;
+  --surface:#F4F4F0;
+  --red:#E05C5C;
+  --r:16px;
+  --shadow:0 8px 40px rgba(27,67,50,0.12);
+}
+
+body{font-family:'Sora',sans-serif;background:#0f2318;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;overflow:hidden;}
+
+/* â”€â”€ BRAND PAGE â”€â”€ */
+.brand-hero{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:linear-gradient(160deg,#0a1a0f 0%,#1B4332 60%,#0f2318 100%);}
+.brand-hero::before{content:'';position:absolute;inset:0;background:url("data:image/svg+xml,%3Csvg width='80' height='80' viewBox='0 0 80 80' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='%2395D5B2' fill-opacity='0.04'%3E%3Ccircle cx='40' cy='40' r='1'/%3E%3C/g%3E%3C/svg%3E");}
+.brand-wordmark{font-family:'Instrument Serif',serif;font-size:72px;color:#fff;letter-spacing:-2px;margin-bottom:8px;opacity:0;animation:heroFade 1s ease 0.3s forwards;}
+.brand-tagline{font-size:13px;color:rgba(255,255,255,0.4);letter-spacing:0.2em;text-transform:uppercase;opacity:0;animation:heroFade 1s ease 0.6s forwards;}
+.brand-cta{margin-top:48px;opacity:0;animation:heroFade 1s ease 0.9s forwards;}
+.cta-btn{display:flex;align-items:center;gap:10px;background:#fff;color:var(--brand);border:none;border-radius:40px;padding:14px 28px;font-family:'Sora',sans-serif;font-size:13px;font-weight:600;letter-spacing:0.06em;cursor:pointer;transition:all 0.3s;box-shadow:0 4px 24px rgba(0,0,0,0.2);}
+.cta-btn:hover{transform:translateY(-3px);box-shadow:0 8px 32px rgba(0,0,0,0.3);}
+.cta-btn svg{width:18px;height:18px;}
+.brand-stats{position:fixed;bottom:40px;left:50%;transform:translateX(-50%);display:flex;gap:48px;opacity:0;animation:heroFade 1s ease 1.2s forwards;}
+.stat{text-align:center;}
+.stat-num{font-family:'Instrument Serif',serif;font-size:28px;color:#fff;}
+.stat-label{font-size:11px;color:rgba(255,255,255,0.4);letter-spacing:0.1em;text-transform:uppercase;margin-top:2px;}
+@keyframes heroFade{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+
+/* â”€â”€ OVERLAY â”€â”€ */
+#overlay{position:fixed;inset:0;background:rgba(10,26,15,0.7);z-index:100;display:none;align-items:center;justify-content:center;backdrop-filter:blur(12px);animation:overlayIn 0.3s ease;}
+#overlay.open{display:flex;}
+@keyframes overlayIn{from{opacity:0}to{opacity:1}}
+
+/* â”€â”€ PANEL â”€â”€ */
+.panel{width:100%;max-width:480px;height:90vh;max-height:820px;background:var(--bg);border-radius:24px;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 40px 100px rgba(0,0,0,0.4);animation:panelUp 0.5s cubic-bezier(0.34,1.56,0.64,1);}
+@keyframes panelUp{from{transform:translateY(60px) scale(0.96);opacity:0}to{transform:none;opacity:1}}
+@media(max-width:520px){.panel{height:100vh;max-height:none;border-radius:0;}}
+
+/* â”€â”€ HEADER â”€â”€ */
+.hdr{background:var(--brand);padding:0 20px;flex-shrink:0;}
+.hdr-top{display:flex;align-items:center;justify-content:space-between;padding:16px 0 14px;}
+.hdr-brand{display:flex;align-items:center;gap:10px;}
+.hdr-dot{width:34px;height:34px;background:rgba(255,255,255,0.15);border-radius:50%;display:flex;align-items:center;justify-content:center;}
+.hdr-dot svg{width:16px;height:16px;}
+.hdr-name{font-family:'Instrument Serif',serif;font-size:17px;color:#fff;letter-spacing:0.02em;}
+.hdr-sub{font-size:10px;color:rgba(255,255,255,0.5);letter-spacing:0.08em;text-transform:uppercase;margin-top:1px;}
+.hdr-close{background:rgba(255,255,255,0.1);border:none;border-radius:50%;width:32px;height:32px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:rgba(255,255,255,0.7);transition:all 0.2s;}
+.hdr-close:hover{background:rgba(255,255,255,0.2);color:#fff;}
+
+/* â”€â”€ SECTION TABS â”€â”€ */
+.sec-tabs{display:flex;gap:4px;padding:0 0 14px;}
+.sec-tab{flex:1;padding:8px 4px;border-radius:8px;font-size:10px;font-weight:600;letter-spacing:0.04em;text-align:center;color:rgba(255,255,255,0.35);background:rgba(255,255,255,0.08);transition:all 0.3s;cursor:default;line-height:1.3;}
+.sec-tab.done{color:rgba(255,255,255,0.6);background:rgba(255,255,255,0.12);}
+.sec-tab.done::after{content:' âœ“';}
+.sec-tab.active{background:#fff;color:var(--brand);}
+
+/* â”€â”€ PROGRESS â”€â”€ */
+.prog-bar{height:3px;background:rgba(255,255,255,0.1);}
+.prog-fill{height:100%;background:var(--accent);transition:width 0.5s cubic-bezier(0.4,0,0.2,1);}
+
+/* â”€â”€ SCREENS â”€â”€ */
+.screen{display:none;flex-direction:column;flex:1;overflow:hidden;}
+.screen.active{display:flex;}
+
+/* â”€â”€ QUESTION SCREEN â”€â”€ */
+.q-wrap{flex:1;position:relative;overflow:hidden;}
+.q-slide{position:absolute;inset:0;padding:32px 28px 24px;overflow-y:auto;display:flex;flex-direction:column;transition:transform 0.38s cubic-bezier(0.4,0,0.2,1),opacity 0.38s ease;}
+.q-slide::-webkit-scrollbar{width:3px;}
+.q-slide::-webkit-scrollbar-thumb{background:#ddd;border-radius:2px;}
+.q-slide.active{transform:none;opacity:1;}
+.q-slide.right{transform:translateX(100%);opacity:0;pointer-events:none;}
+.q-slide.left{transform:translateX(-100%);opacity:0;pointer-events:none;}
+
+.q-section-tag{display:inline-flex;align-items:center;gap:6px;font-size:10px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:var(--brand2);margin-bottom:14px;}
+.q-section-dot{width:5px;height:5px;background:var(--brand2);border-radius:50%;}
+.q-title{font-family:'Instrument Serif',serif;font-size:24px;line-height:1.35;color:var(--text);margin-bottom:6px;}
+.q-sub{font-size:13px;color:var(--text3);line-height:1.6;margin-bottom:28px;font-weight:300;}
+
+/* OPTIONS â€” Chips */
+.chips{display:flex;flex-wrap:wrap;gap:8px;}
+.chip{padding:10px 18px;background:var(--white);border:1.5px solid var(--border);border-radius:32px;font-size:13px;font-weight:500;color:var(--text2);cursor:pointer;transition:all 0.18s;font-family:'Sora',sans-serif;}
+.chip:hover{border-color:var(--brand2);color:var(--brand);}
+.chip.sel{background:var(--brand);color:#fff;border-color:var(--brand);}
+
+/* OPTIONS â€” Cards 2col */
+.cards2{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+.card-opt{background:var(--white);border:1.5px solid var(--border);border-radius:14px;padding:16px 14px;cursor:pointer;transition:all 0.18s;text-align:center;}
+.card-opt:hover{border-color:var(--brand2);background:#f0faf5;}
+.card-opt.sel{border-color:var(--brand);background:#E8F5EE;}
+.card-emoji{font-size:28px;margin-bottom:8px;display:block;}
+.card-label{font-size:13px;font-weight:600;color:var(--text);margin-bottom:3px;}
+.card-sub{font-size:11px;color:var(--text3);line-height:1.4;}
+
+/* OPTIONS â€” Scale */
+.scale-row{display:flex;gap:6px;align-items:stretch;}
+.scale-btn{flex:1;padding:14px 6px;background:var(--white);border:1.5px solid var(--border);border-radius:10px;font-size:14px;font-weight:700;color:var(--text2);cursor:pointer;transition:all 0.18s;text-align:center;font-family:'Sora',sans-serif;}
+.scale-btn .s-lbl{font-size:9px;font-weight:400;color:var(--text3);display:block;margin-top:4px;line-height:1.2;}
+.scale-btn:hover{border-color:var(--brand2);color:var(--brand);}
+.scale-btn.sel{background:var(--brand);color:#fff;border-color:var(--brand);}
+.scale-btn.sel .s-lbl{color:rgba(255,255,255,0.7);}
+
+/* OPTIONS â€” Text input */
+.txt-inp{width:100%;padding:14px 18px;border:1.5px solid var(--border);border-radius:12px;font-size:15px;font-family:'Sora',sans-serif;font-weight:400;color:var(--text);background:var(--white);outline:none;transition:border-color 0.2s;}
+.txt-inp:focus{border-color:var(--brand2);}
+.txt-inp::placeholder{color:#ccc;}
+
+/* Dual input */
+.dual-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+.dual-row .inp-wrap label{font-size:11px;font-weight:600;color:var(--text3);letter-spacing:0.06em;text-transform:uppercase;display:block;margin-bottom:6px;}
+
+/* â”€â”€ BOTTOM NAV â”€â”€ */
+.bot-nav{padding:14px 24px 18px;border-top:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-shrink:0;background:var(--white);}
+.btn-prev{display:flex;align-items:center;gap:6px;background:none;border:1.5px solid var(--border);border-radius:32px;padding:10px 18px;font-size:12.5px;font-weight:600;color:var(--text2);cursor:pointer;transition:all 0.2s;font-family:'Sora',sans-serif;}
+.btn-prev:hover:not(:disabled){border-color:var(--brand);color:var(--brand);}
+.btn-prev:disabled{opacity:0.3;cursor:not-allowed;}
+.btn-next{display:flex;align-items:center;gap:8px;background:var(--brand);border:none;border-radius:32px;padding:12px 26px;font-size:12.5px;font-weight:700;color:#fff;cursor:pointer;transition:all 0.2s;font-family:'Sora',sans-serif;letter-spacing:0.04em;}
+.btn-next:hover{background:var(--brand2);transform:translateX(2px);}
+.q-count{font-size:11px;color:var(--text3);font-weight:500;}
+
+/* â”€â”€ PHOTO SCREEN â”€â”€ */
+.photo-body{flex:1;padding:32px 28px 24px;overflow-y:auto;display:flex;flex-direction:column;}
+.upload-box{border:2px dashed var(--border);border-radius:16px;padding:32px 24px;text-align:center;cursor:pointer;transition:all 0.2s;background:var(--surface);margin-bottom:12px;flex-shrink:0;}
+.upload-box:hover{border-color:var(--brand2);background:#f0faf5;}
+.upload-box svg{width:40px;height:40px;color:var(--brand2);margin-bottom:12px;}
+.upload-box h4{font-size:15px;font-weight:600;color:var(--text);margin-bottom:4px;}
+.upload-box span{font-size:12px;color:var(--text3);}
+#photo-input{display:none;}
+.photo-prev{width:100%;border-radius:12px;max-height:180px;object-fit:cover;margin-bottom:12px;display:none;border:2px solid var(--accent);}
+.analyze-btn{width:100%;padding:14px;background:var(--brand);border:none;border-radius:32px;font-family:'Sora',sans-serif;font-size:14px;font-weight:700;color:#fff;cursor:pointer;margin-bottom:10px;display:none;transition:all 0.2s;}
+.analyze-btn:hover{background:var(--brand2);}
+.skip-link{width:100%;padding:12px;background:none;border:1.5px solid var(--border);border-radius:32px;font-family:'Sora',sans-serif;font-size:13px;font-weight:500;color:var(--text3);cursor:pointer;transition:all 0.2s;}
+.skip-link:hover{border-color:var(--brand);color:var(--brand);}
+
+/* â”€â”€ LOADING SCREEN â”€â”€ */
+.load-body{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px;text-align:center;}
+.load-ring{width:56px;height:56px;border:3px solid var(--border);border-top-color:var(--brand2);border-radius:50%;animation:spin 1s linear infinite;margin-bottom:24px;}
+@keyframes spin{to{transform:rotate(360deg)}}
+.load-title{font-family:'Instrument Serif',serif;font-size:22px;color:var(--text);margin-bottom:8px;}
+.load-sub{font-size:13px;color:var(--text3);line-height:1.6;margin-bottom:28px;}
+.load-steps{width:100%;max-width:260px;}
+.load-step{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);font-size:12.5px;color:var(--text3);}
+.load-step:last-child{border:none;}
+.ld{width:8px;height:8px;border-radius:50%;background:var(--border);flex-shrink:0;transition:background 0.4s;}
+.ld.done{background:var(--brand2);}
+
+/* â”€â”€ RESULT SCREEN â”€â”€ */
+.result-body{flex:1;overflow-y:auto;padding:0;}
+.result-body::-webkit-scrollbar{width:3px;}
+.result-body::-webkit-scrollbar-thumb{background:#ddd;border-radius:2px;}
+
+/* Hero assessment */
+.res-hero{background:linear-gradient(135deg,var(--brand) 0%,var(--brand2) 100%);padding:28px 28px 24px;color:#fff;}
+.res-hero-tag{font-size:10px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:var(--accent);margin-bottom:8px;}
+.res-hero-title{font-family:'Instrument Serif',serif;font-size:22px;margin-bottom:10px;line-height:1.3;}
+.res-hero-text{font-size:13px;line-height:1.7;color:rgba(255,255,255,0.8);font-weight:300;}
+
+/* Concern badge */
+.res-concern-row{display:flex;gap:8px;flex-wrap:wrap;margin-top:16px;}
+.res-badge{display:inline-flex;align-items:center;gap:5px;background:rgba(255,255,255,0.15);border-radius:20px;padding:5px 12px;font-size:11px;font-weight:600;color:#fff;}
+
+/* Routine section */
+.res-section{padding:20px 28px;}
+.res-section-title{display:flex;align-items:center;gap:8px;font-size:11px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:var(--brand);margin-bottom:16px;}
+.res-section-title span{font-size:16px;}
+
+/* Product step card */
+.step-card{background:var(--white);border:1px solid var(--border);border-radius:16px;padding:16px;margin-bottom:12px;display:flex;gap:14px;}
+.step-card:last-child{margin-bottom:0;}
+.step-num{width:32px;height:32px;background:var(--brand);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:#fff;flex-shrink:0;}
+.step-info{flex:1;}
+.step-product{font-size:14px;font-weight:700;color:var(--text);margin-bottom:2px;}
+.step-category{font-size:10px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:var(--brand2);margin-bottom:6px;}
+.step-when{display:flex;align-items:center;gap:5px;font-size:11.5px;color:var(--text3);margin-bottom:6px;}
+.step-when svg{width:12px;height:12px;flex-shrink:0;}
+.step-how{font-size:12px;color:var(--text2);line-height:1.6;margin-bottom:6px;padding:8px 10px;background:var(--surface);border-radius:8px;}
+.step-why{font-size:12px;color:var(--text3);line-height:1.5;font-style:italic;}
+.step-price{font-size:13px;font-weight:700;color:var(--gold);margin-top:6px;}
+
+/* Tips */
+.tips-box{margin:0 28px 20px;background:#FFFBF0;border:1px solid #F0E6C0;border-radius:14px;padding:16px;}
+.tips-title{font-size:10px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:#B5850A;margin-bottom:10px;}
+.tip-row{display:flex;gap:8px;font-size:12.5px;color:#5C4A1E;line-height:1.5;margin-bottom:6px;font-weight:300;}
+.tip-row::before{content:'âœ¦';color:#C9A84C;font-size:10px;flex-shrink:0;margin-top:3px;}
+
+/* Warning */
+.warn-box{margin:0 28px 20px;background:#FFF5F5;border:1px solid #FFD5D5;border-radius:14px;padding:14px 16px;font-size:12.5px;color:#C0392B;line-height:1.5;}
+
+/* Restart */
+.res-foot{padding:16px 28px 24px;border-top:1px solid var(--border);flex-shrink:0;}
+.restart-btn{width:100%;padding:14px;background:var(--brand);border:none;border-radius:32px;font-family:'Sora',sans-serif;font-size:13px;font-weight:700;color:#fff;cursor:pointer;letter-spacing:0.04em;}
+.restart-btn:hover{background:var(--brand2);}
+.error-actions{display:flex;justify-content:center;gap:12px;flex-wrap:wrap;margin-top:24px;}
+.retry-btn{padding:14px 22px;background:var(--brand);border:none;border-radius:32px;font-family:'Sora',sans-serif;font-size:13px;font-weight:700;color:#fff;cursor:pointer;letter-spacing:0.04em;}
+.retry-btn:hover{background:var(--brand2);}
+
+/* Professional full-page redesign */
+:root{
+  --brand:#173f31;
+  --brand2:#0f6f63;
+  --accent:#b97055;
+  --accent2:#dfe9e4;
+  --gold:#c2933b;
+  --bg:#fbfbf8;
+  --white:#ffffff;
+  --text:#111513;
+  --text2:#4f5b55;
+  --text3:#87938d;
+  --border:#dfe5e1;
+  --surface:#eef4f0;
+  --red:#d35b63;
+  --shadow:0 28px 90px rgba(18,38,31,.16);
+}
+body{background:#f3f1ec;color:var(--text);overflow:hidden;}
+.brand-hero{align-items:flex-start;justify-content:center;padding:8vh 7vw;background:#ece8df;overflow:hidden;}
+.brand-hero::before{background:linear-gradient(120deg,rgba(255,255,255,.92),rgba(255,255,255,.58) 48%,rgba(23,63,49,.1));z-index:0;}
+.brand-hero::after{content:'';position:absolute;right:0;top:0;width:52vw;height:100%;background:linear-gradient(150deg,rgba(15,111,99,.5),rgba(185,112,85,.34)),url("https://images.unsplash.com/photo-1556228578-8c89e6adf883?auto=format&fit=crop&w=1200&q=80");background-size:cover;background-position:center;clip-path:polygon(12% 0,100% 0,100% 100%,0 100%);}
+.brand-wordmark,.brand-tagline,.brand-cta{position:relative;z-index:1;animation:heroFade .8s ease forwards;}
+.brand-wordmark{font-size:clamp(58px,8vw,112px);line-height:.88;color:var(--text);letter-spacing:0;margin-bottom:24px;max-width:680px;}
+.brand-wordmark::before{content:'Personalised skin analysis';display:block;font-family:'Sora',sans-serif;font-size:12px;font-weight:700;letter-spacing:.18em;text-transform:uppercase;color:var(--brand2);margin-bottom:22px;}
+.brand-tagline{max-width:560px;font-size:clamp(17px,2vw,23px);line-height:1.55;color:#36433e;font-weight:300;letter-spacing:0;text-transform:none;}
+.brand-cta{margin-top:34px;display:flex;align-items:center;gap:14px;}
+.cta-btn{height:52px;background:var(--brand);color:#fff;border-radius:4px;padding:0 22px;font-size:13px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;box-shadow:0 16px 38px rgba(23,63,49,.24);}
+.cta-btn:hover{background:var(--brand2);box-shadow:0 20px 48px rgba(15,111,99,.26);}
+.brand-stats{z-index:1;left:7vw;right:auto;bottom:7vh;transform:none;display:grid;grid-template-columns:repeat(3,minmax(120px,1fr));gap:1px;background:rgba(17,21,19,.12);border:1px solid rgba(17,21,19,.08);}
+.stat{background:rgba(255,255,255,.76);padding:18px 20px;}
+.stat-num{font-size:34px;color:var(--brand);}
+.stat-label{color:var(--text2);}
+#overlay{background:var(--bg);align-items:stretch;justify-content:stretch;backdrop-filter:none;}
+#overlay.open{display:block;}
+.panel{width:100vw;max-width:none;height:100vh;max-height:none;border-radius:0;box-shadow:none;background:radial-gradient(circle at 15% 10%,rgba(15,111,99,.08),transparent 26%),linear-gradient(180deg,#fbfbf8,#f4f5f0);display:grid;grid-template-rows:auto 4px minmax(0,1fr);animation:none;}
+.hdr{display:grid;grid-template-columns:minmax(230px,.8fr) minmax(420px,1.35fr) auto;gap:28px;align-items:center;padding:22px clamp(22px,4vw,64px);background:rgba(251,251,248,.9);border-bottom:1px solid rgba(17,21,19,.08);backdrop-filter:blur(18px);}
+.hdr-top{display:contents;padding:0;}
+.hdr-brand{gap:12px;min-width:0;}
+.hdr-dot{width:42px;height:42px;background:var(--brand);border-radius:4px;box-shadow:0 12px 24px rgba(23,63,49,.18);}
+.hdr-dot svg{width:20px;height:20px;}
+.hdr-name{font-size:24px;line-height:1;color:var(--text);letter-spacing:0;white-space:nowrap;}
+.hdr-sub{font-size:10px;color:var(--text3);letter-spacing:.12em;text-transform:uppercase;margin-top:4px;white-space:nowrap;}
+.hdr-close{justify-self:end;width:42px;height:42px;border:1px solid var(--border);border-radius:4px;background:#fff;color:var(--text2);}
+.hdr-close:hover{border-color:var(--brand);color:var(--brand);background:#fff;box-shadow:0 12px 24px rgba(17,21,19,.08);}
+.sec-tabs{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;padding:0;}
+.sec-tab{padding:10px 12px;border:1px solid var(--border);border-radius:4px;background:#fff;color:var(--text3);font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;text-align:left;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.sec-tab::before{content:'';display:inline-block;width:7px;height:7px;border:1px solid currentColor;border-radius:50%;margin-right:8px;vertical-align:1px;}
+.sec-tab.done{color:var(--brand2);background:#edf6f2;border-color:#cfe4dc;}
+.sec-tab.done::before{background:var(--brand2);border-color:var(--brand2);}
+.sec-tab.done::after{content:'';}
+.sec-tab.active{background:var(--brand);border-color:var(--brand);color:#fff;box-shadow:0 14px 34px rgba(23,63,49,.18);}
+.prog-bar{height:4px;background:#e6ebe7;}
+.prog-fill{background:linear-gradient(90deg,var(--brand2),var(--accent));}
+.screen{min-height:0;}
+#scr-q{height:100%;position:relative;}
+.q-wrap{min-height:0;}
+.q-slide{display:grid;grid-template-columns:minmax(280px,.72fr) minmax(360px,1fr);gap:clamp(28px,5vw,88px);align-items:center;padding:clamp(28px,6vw,90px) clamp(22px,7vw,112px) clamp(88px,10vh,120px);overflow-y:auto;}
+.q-slide::before{content:'';position:absolute;left:clamp(22px,7vw,112px);top:50%;width:1px;height:min(420px,56vh);background:linear-gradient(180deg,transparent,var(--border),transparent);transform:translateY(-50%);}
+.q-intro{position:relative;padding-left:34px;}
+.q-answer{width:100%;max-width:760px;justify-self:end;}
+.q-section-tag{font-size:11px;font-weight:800;letter-spacing:.16em;color:var(--brand2);margin-bottom:24px;}
+.q-section-dot{width:8px;height:8px;background:var(--accent);}
+.q-title{font-size:clamp(38px,5vw,72px);line-height:.98;letter-spacing:0;margin-bottom:20px;max-width:760px;}
+.q-sub{font-size:clamp(14px,1.3vw,18px);color:var(--text2);line-height:1.7;max-width:580px;margin-bottom:0;}
+.chips{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;}
+.chip{min-height:58px;padding:14px 16px;border:1px solid var(--border);border-radius:4px;font-size:14px;font-weight:650;color:var(--text);text-align:left;box-shadow:0 8px 24px rgba(17,21,19,.04);}
+.chip:hover{border-color:var(--brand2);transform:translateY(-1px);}
+.chip.sel{background:var(--brand);border-color:var(--brand);box-shadow:0 16px 38px rgba(23,63,49,.2);}
+.cards2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;}
+.card-opt{min-height:142px;border:1px solid var(--border);border-radius:6px;padding:22px;text-align:left;box-shadow:0 10px 28px rgba(17,21,19,.05);}
+.card-opt:hover{border-color:var(--brand2);transform:translateY(-2px);background:#fff;}
+.card-opt.sel{border-color:var(--brand);background:#edf5f1;box-shadow:inset 0 0 0 1px var(--brand),0 16px 34px rgba(23,63,49,.12);}
+.card-emoji{font-size:30px;margin-bottom:14px;}
+.card-label{font-size:15px;font-weight:750;margin-bottom:6px;}
+.card-sub{font-size:12px;color:var(--text2);line-height:1.55;}
+.scale-row{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;}
+.scale-btn{min-height:104px;border:1px solid var(--border);border-radius:4px;font-size:28px;font-weight:750;color:var(--text);box-shadow:0 8px 24px rgba(17,21,19,.04);}
+.scale-btn .s-lbl{font-size:10px;font-weight:700;color:var(--text3);margin-top:10px;text-transform:uppercase;letter-spacing:.08em;}
+.scale-btn:hover{border-color:var(--brand2);transform:translateY(-1px);}
+.scale-btn.sel{background:var(--brand);border-color:var(--brand);}
+.txt-inp{min-height:64px;padding:18px 20px;border:1px solid var(--border);border-radius:4px;font-size:17px;font-weight:500;box-shadow:0 12px 30px rgba(17,21,19,.05);}
+.txt-inp:focus{border-color:var(--brand2);box-shadow:0 0 0 4px rgba(15,111,99,.1),0 16px 36px rgba(17,21,19,.08);}
+.dual-row{gap:14px;}
+.dual-row .inp-wrap label{font-weight:800;color:var(--text2);letter-spacing:.12em;margin-bottom:8px;}
+.bot-nav{position:absolute;left:0;right:0;bottom:0;z-index:6;padding:18px clamp(22px,4vw,64px);display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:18px;background:rgba(251,251,248,.92);border-top:1px solid rgba(17,21,19,.08);backdrop-filter:blur(18px);}
+.btn-prev,.btn-next{height:46px;border-radius:4px;padding:0 18px;font-size:12px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;}
+.btn-prev{justify-self:start;background:#fff;border:1px solid var(--border);color:var(--text2);}
+.btn-next{justify-self:end;background:var(--brand);border:1px solid var(--brand);min-width:132px;}
+.btn-next:hover{background:var(--brand2);border-color:var(--brand2);transform:translateY(-1px);}
+.q-count{font-size:12px;color:var(--text2);font-weight:750;letter-spacing:.12em;text-transform:uppercase;}
+.photo-body,.load-body{flex:1;display:grid;align-content:center;justify-items:center;padding:clamp(28px,6vw,90px) clamp(22px,7vw,112px);text-align:center;overflow-y:auto;}
+.photo-body{max-width:900px;margin:0 auto;width:100%;}
+.upload-box{width:100%;max-width:620px;border:1px dashed #b9c4bd;border-radius:6px;padding:42px 28px;background:#fff;margin:28px 0 14px;box-shadow:0 18px 46px rgba(17,21,19,.06);}
+.photo-prev{max-width:620px;border-radius:6px;max-height:260px;border:1px solid var(--border);box-shadow:0 18px 46px rgba(17,21,19,.08);}
+.analyze-btn,.skip-link,.restart-btn{height:48px;border-radius:4px;font-size:13px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;}
+.analyze-btn,.skip-link{max-width:620px;}
+.load-title{font-size:clamp(34px,4vw,54px);}
+.load-sub{font-size:15px;max-width:540px;}
+.load-steps{max-width:430px;background:#fff;border:1px solid var(--border);border-radius:6px;padding:8px 20px;box-shadow:0 18px 46px rgba(17,21,19,.06);}
+.load-step{padding:14px 0;font-size:13px;text-align:left;}
+.result-body::-webkit-scrollbar,.q-slide::-webkit-scrollbar{width:8px;}
+.result-body::-webkit-scrollbar-thumb,.q-slide::-webkit-scrollbar-thumb{background:#cbd5cf;border-radius:999px;}
+.result-shell{width:min(1180px,calc(100% - 44px));margin:34px auto 42px;display:flex;flex-direction:column;align-items:center;gap:24px;}
+.res-hero{width:100%;background:var(--brand);padding:clamp(34px,5vw,64px);border-radius:34px;text-align:center;box-shadow:0 24px 70px rgba(23,63,49,.16);}
+.res-hero-tag{font-size:12px;font-weight:800;letter-spacing:.18em;color:#9dd8cc;margin-bottom:14px;}
+.res-hero-title{font-size:clamp(38px,5vw,66px);line-height:.96;margin:0 auto 18px;max-width:820px;}
+.res-hero-text{font-size:clamp(17px,1.5vw,21px);line-height:1.65;max-width:860px;margin:0 auto;color:rgba(255,255,255,.86);}
+.res-concern-row{justify-content:center;}
+.res-section{width:100%;padding:0;}
+.routine-board{width:100%;display:flex;align-items:stretch;justify-content:center;gap:24px;flex-wrap:wrap;}
+.routine-panel{min-width:0;flex:1 1 520px;border:1px solid rgba(23,63,49,.12);border-radius:38px;padding:28px;background:linear-gradient(135deg,#ffffff,#f2f7f4);box-shadow:0 22px 70px rgba(17,21,19,.08);}
+.routine-panel.pm{background:linear-gradient(135deg,#ffffff,#f4f0ed);}
+.routine-panel.is-single{flex:0 1 500px;}
+.routine-panel.is-single .routine-note{max-width:300px;}
+.routine-panel.is-single .routine-flow{width:min(286px,100%);overflow-x:hidden;}
+.routine-panel.is-single .routine-step{flex:0 0 100%;}
+.routine-panel.is-single .step-media{aspect-ratio:1.15;}
+.routine-heading{display:flex;align-items:flex-end;justify-content:space-between;gap:18px;margin-bottom:20px;}
+.routine-title-wrap{min-width:0;}
+.routine-kicker{font-size:12px;font-weight:850;letter-spacing:.16em;text-transform:uppercase;color:var(--brand2);margin-bottom:8px;}
+.routine-title{font-family:'Instrument Serif',serif;font-size:clamp(32px,3.8vw,50px);line-height:1;color:var(--text);}
+.routine-note{max-width:360px;font-size:14px;line-height:1.6;color:var(--text2);text-align:right;}
+.routine-flow{display:flex;align-items:stretch;gap:0;width:100%;overflow-x:auto;padding:4px 4px 16px;scroll-snap-type:x mandatory;}
+.routine-flow::-webkit-scrollbar{height:8px;}
+.routine-flow::-webkit-scrollbar-thumb{background:#cbd5cf;border-radius:999px;}
+.routine-step{display:flex;align-items:center;flex:0 0 min(260px,78vw);scroll-snap-align:start;}
+.routine-step:last-child .flow-arrow{display:none;}
+.flow-arrow{width:52px;display:flex;align-items:center;justify-content:center;color:var(--brand2);flex-shrink:0;}
+.flow-arrow::before{content:'';width:34px;height:1px;background:currentColor;}
+.flow-arrow::after{content:'';width:8px;height:8px;border-top:1px solid currentColor;border-right:1px solid currentColor;transform:rotate(45deg);margin-left:-8px;}
+.step-card{border-radius:6px;max-width:960px;box-shadow:0 10px 30px rgba(17,21,19,.04);}
+.routine-step .step-card{width:100%;height:100%;max-width:none;margin:0;display:flex;flex-direction:column;gap:16px;padding:16px;border-radius:24px;border-color:rgba(23,63,49,.12);box-shadow:0 16px 42px rgba(17,21,19,.07);}
+.step-media{position:relative;width:100%;aspect-ratio:4/3;background:linear-gradient(135deg,#f7faf8,#e8f1ec);border:1px solid var(--border);border-radius:18px;display:flex;align-items:center;justify-content:center;overflow:hidden;}
+.step-media img{width:100%;height:100%;object-fit:contain;padding:14px;}
+.step-placeholder{font-family:'Instrument Serif',serif;font-size:48px;color:var(--brand);line-height:1;}
+.step-product{text-decoration:none;}
+.step-product:hover{color:var(--brand2);}
+.routine-step .step-num{position:absolute;top:10px;left:10px;z-index:1;border-radius:999px;}
+.routine-step .step-info{display:flex;flex-direction:column;min-height:0;}
+.routine-step .step-product{font-size:18px;line-height:1.25;margin-bottom:7px;}
+.routine-step .step-category{font-size:11px;margin-bottom:12px;color:var(--accent);}
+.routine-step .step-when{font-size:14px;line-height:1.5;color:var(--text);margin-bottom:10px;}
+.routine-step .step-how{font-size:15px;line-height:1.55;margin-bottom:10px;padding:12px 14px;border-radius:16px;background:#edf5f1;color:#25362f;}
+.routine-step .step-why{font-size:14px;line-height:1.6;color:var(--text2);font-style:normal;}
+.step-label{display:block;margin-bottom:5px;font-size:10px;font-weight:850;letter-spacing:.13em;text-transform:uppercase;color:var(--brand2);}
+.step-num{border-radius:4px;background:var(--brand);}
+.tips-box,.warn-box{width:100%;max-width:none;margin-left:0;margin-right:0;border-radius:24px;padding:22px 24px;}
+.tips-title{font-size:12px;}
+.tip-row{font-size:15px;line-height:1.65;}
+.life-panel{width:100%;border:1px solid rgba(15,111,99,.16);border-radius:30px;padding:24px;background:#fff;box-shadow:0 18px 54px rgba(17,21,19,.06);}
+.life-head{display:flex;align-items:flex-end;justify-content:space-between;gap:18px;margin-bottom:18px;}
+.life-kicker{font-size:12px;font-weight:850;letter-spacing:.16em;text-transform:uppercase;color:var(--brand2);margin-bottom:8px;}
+.life-title{font-family:'Instrument Serif',serif;font-size:clamp(30px,3.4vw,46px);line-height:1;color:var(--text);}
+.life-note{max-width:380px;font-size:14px;line-height:1.6;color:var(--text2);text-align:right;}
+.life-flow{display:flex;gap:14px;overflow-x:auto;padding:2px 2px 12px;scroll-snap-type:x mandatory;}
+.life-flow::-webkit-scrollbar{height:8px;}
+.life-flow::-webkit-scrollbar-thumb{background:#cbd5cf;border-radius:999px;}
+.life-card{flex:1 0 220px;min-height:154px;padding:18px;border:1px solid var(--border);border-radius:20px;background:linear-gradient(135deg,#f7fbf9,#fff);scroll-snap-align:start;}
+.life-num{width:30px;height:30px;display:flex;align-items:center;justify-content:center;border-radius:999px;background:var(--brand);color:#fff;font-size:12px;font-weight:800;margin-bottom:14px;}
+.life-card-title{font-size:17px;font-weight:800;color:var(--text);line-height:1.25;margin-bottom:9px;}
+.life-action{font-size:14px;line-height:1.5;color:#26362f;margin-bottom:8px;}
+.life-reason{font-size:13px;line-height:1.5;color:var(--text2);}
+.res-foot{padding:18px clamp(28px,8vw,120px) 26px;background:#fff;}
+.restart-btn{max-width:360px;}
+.error-actions{margin-top:28px;}
+.retry-btn{height:48px;border-radius:4px;padding:0 22px;font-size:13px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;}
+@media(max-width:900px){
+  body{overflow:auto;}
+  .brand-hero{padding:8vh 24px 32vh;}
+  .brand-hero::after{width:100%;height:42%;top:auto;bottom:0;clip-path:none;opacity:.42;}
+  .brand-stats{grid-template-columns:repeat(3,minmax(0,1fr));left:24px;right:24px;bottom:24px;}
+  .stat{padding:14px 12px;}
+  .stat-num{font-size:27px;}
+  .hdr{grid-template-columns:1fr auto;gap:16px;padding:16px 18px;}
+  .hdr-close{grid-column:2;grid-row:1;}
+  .sec-tabs{grid-column:1 / -1;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;}
+  .q-slide{grid-template-columns:1fr;align-content:start;gap:28px;padding:38px 20px 96px;}
+  .q-slide::before{display:none;}
+  .q-intro{padding-left:0;}
+  .q-answer{justify-self:stretch;max-width:none;}
+  .chips,.cards2{grid-template-columns:1fr;}
+  .scale-row{gap:6px;}
+  .scale-btn{min-height:82px;font-size:22px;}
+  .dual-row{grid-template-columns:1fr;}
+  .bot-nav{grid-template-columns:auto 1fr auto;padding:14px 16px;}
+  .q-count{text-align:center;font-size:10px;}
+  .btn-prev,.btn-next{min-width:auto;padding:0 12px;}
+  .result-shell{width:calc(100% - 28px);margin:18px auto 28px;gap:16px;}
+  .res-hero{border-radius:26px;padding:30px 20px;}
+  .routine-board{gap:16px;}
+  .routine-panel{border-radius:28px;padding:18px;}
+  .routine-panel.is-single{flex-basis:100%;}
+  .routine-panel.is-single .routine-flow{width:100%;}
+  .routine-heading{align-items:flex-start;flex-direction:column;gap:10px;margin-bottom:16px;}
+  .routine-note{text-align:left;font-size:13px;}
+  .routine-step{flex-basis:min(268px,82vw);}
+  .flow-arrow{width:36px;}
+  .routine-step .step-product{font-size:16px;}
+  .routine-step .step-how{font-size:14px;}
+  .routine-step .step-why,.routine-step .step-when{font-size:13px;}
+  .life-panel{border-radius:26px;padding:18px;}
+  .life-head{align-items:flex-start;flex-direction:column;gap:10px;}
+  .life-note{text-align:left;font-size:13px;}
+  .life-card{flex-basis:min(230px,76vw);}
+}
+
+</style>
+</head>
+<body>
+
+<!-- BRAND HERO -->
+<div class="brand-hero">
+  <div class="brand-wordmark">AlphaMark.</div>
+  <div class="brand-tagline">Science-backed skincare</div>
+  <div class="brand-cta">
+    <button class="cta-btn" onclick="openWidget()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 3H5a2 2 0 0 0-2 2v4m6-6h10a2 2 0 0 1 2 2v4M9 3v18m0 0h10a2 2 0 0 0 2-2V9M9 21H5a2 2 0 0 1-2-2V9m0 0h18"/></svg>
+      START SKIN ASSESSMENT
+    </button>
+  </div>
+  <div class="brand-stats">
+    <div class="stat"><div class="stat-num">10L+</div><div class="stat-label">Customers</div></div>
+    <div class="stat"><div class="stat-num">93%</div><div class="stat-label">Saw results</div></div>
+    <div class="stat"><div class="stat-num">4.8</div><div class="stat-label">Rating</div></div>
+  </div>
+</div>
+
+<!-- OVERLAY -->
+<div id="overlay">
+<div class="panel">
+
+  <!-- HEADER -->
+  <div class="hdr">
+    <div class="hdr-top">
+      <div class="hdr-brand">
+        <div class="hdr-dot"><svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1.5"><path d="M12 2C8 2 5 5 5 9c0 5 7 13 7 13s7-8 7-13c0-4-3-7-7-7z"/></svg></div>
+        <div>
+          <div class="hdr-name">AlphaMark Advisor</div>
+          <div class="hdr-sub">Personalised skin analysis</div>
+        </div>
+      </div>
+      <button class="hdr-close" onclick="closeWidget()"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
+    </div>
+    <div class="sec-tabs">
+      <div class="sec-tab active" id="st0">About You</div>
+      <div class="sec-tab" id="st1">Lifestyle</div>
+      <div class="sec-tab" id="st2">Analysis</div>
+      <div class="sec-tab" id="st3">Assessment</div>
+    </div>
+  </div>
+  <div class="prog-bar"><div class="prog-fill" id="prog" style="width:0%"></div></div>
+
+  <!-- QUESTION SCREEN -->
+  <div class="screen active" id="scr-q">
+    <div class="q-wrap" id="q-wrap"></div>
+    <div class="bot-nav">
+      <button class="btn-prev" id="btn-prev" onclick="prev()" disabled>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M19 12H5M5 12l7-7M5 12l7 7"/></svg>
+        Previous
+      </button>
+      <span class="q-count" id="qcount"></span>
+      <button class="btn-next" id="btn-next" onclick="next()">
+        Next <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M13 5l7 7-7 7"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <!-- PHOTO SCREEN -->
+  <div class="screen" id="scr-photo">
+    <div class="photo-body">
+      <div class="q-section-tag"><div class="q-section-dot"></div>Final Step</div>
+      <div class="q-title">Upload your skin photo</div>
+      <div class="q-sub">For the most accurate product match, upload a close-up photo of your skin in natural light without makeup. Used only for this analysis and never stored.</div>
+      <img id="photo-prev" class="photo-prev">
+      <input type="file" id="photo-input" accept="image/*" onchange="onPhoto(event)">
+      <div class="upload-box" onclick="document.getElementById('photo-input').click()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
+        <h4>Upload skin photo</h4>
+        <span>JPG or PNG · Natural light · No makeup</span>
+      </div>
+      <button class="analyze-btn" id="analyze-btn" onclick="analyse()">Analyse My Skin</button>
+      <button class="skip-link" onclick="analyse()">Skip - continue without photo</button>
+    </div>
+  </div>
+
+  <!-- LOADING SCREEN -->
+  <div class="screen" id="scr-load">
+    <div class="load-body">
+      <div class="load-ring"></div>
+      <div class="load-title">Analysing your profile</div>
+      <div class="load-sub">Matching products from our database and building your daily routine...</div>
+      <div class="load-steps">
+        <div class="load-step"><div class="ld" id="ld1"></div>Reading your skin profile</div>
+        <div class="load-step"><div class="ld" id="ld2"></div>Matching products from database</div>
+        <div class="load-step"><div class="ld" id="ld3"></div>Building personalised routine</div>
+        <div class="load-step"><div class="ld" id="ld4"></div>Writing expert instructions</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- RESULT SCREEN -->
+  <div class="screen" id="scr-result">
+    <div class="result-body" id="result-body"></div>
+    <div class="res-foot">
+      <button class="restart-btn" onclick="restart()">Start a New Consultation</button>
+    </div>
+  </div>
+
+</div>
+</div>
+
+<script>
+const API   = 'http://localhost:3000'
+const AKEY  = 'test-api-key-001'
+const BCAT  = 'skincare' // change per brand
+
+// â”€â”€ STATE â”€â”€
+let allQ    = []   // all questions loaded from DB
+let cur     = 0
+let answers = {}
+let photoB64= null
+
+const SECTIONS = ['About You','Lifestyle','Skin Health','Assessment']
+
+// â”€â”€ OPEN / CLOSE â”€â”€
+function openWidget(){
+  document.getElementById('overlay').classList.add('open')
+    const labels = {
+    'skincare':     'Skin Health',
+    'haircare':     'Hair Health',
+    'supplements':  'Health Goals'
+  }
+  document.getElementById('st2').innerText = labels[BCAT] || 'Analysis'
+  if(allQ.length===0) loadQuestions()
+}
+function closeWidget(){
+  document.getElementById('overlay').classList.remove('open')
+}
+
+// â”€â”€ LOAD QUESTIONS FROM BACKEND â”€â”€
+async function loadQuestions(){
+  showScreen('q')
+  document.getElementById('q-wrap').innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:100%;flex-direction:column;gap:12px;color:var(--text3);font-size:13px;"><div class="load-ring" style="width:36px;height:36px;border-width:2px;"></div>Loading your questionnaire...</div>`
+
+  try {
+    // Fetch fixed questions (personal + lifestyle)
+    const res = await fetch(`${API}/api/questions/fixed`, {
+      headers: { 'x-api-key': AKEY }
+    })
+    const data = await res.json()
+
+    if(data.success){
+      // flatten sections into one array
+      data.sections.forEach(sec => {
+        sec.questions.forEach(q => allQ.push({...q, section_label: sec.label}))
+      })
+      buildSlides()
+      updateUI()
+    } else {
+      showFallback()
+    }
+  } catch(e){
+    showFallback()
+  }
+}
+
+// â”€â”€ BUILD SLIDES â”€â”€
+function buildSlides(){
+  const wrap = document.getElementById('q-wrap')
+  wrap.innerHTML = ''
+  allQ.forEach((q,i) => {
+    const div = document.createElement('div')
+    div.className = 'q-slide' + (i===0?' active':' right')
+    div.id = 'qs'+i
+    div.innerHTML = slideHTML(q,i)
+    wrap.appendChild(div)
+  })
+}
+
+function slideHTML(q,i){
+  const saved = answers[q.field_key]
+  let opts = ''
+
+  if(q.input_type==='text'){
+    opts = `<input class="txt-inp" id="fi-${q.field_key}" placeholder="${q.options_json?.placeholder||'Type your answer...'}" value="${saved||''}" oninput="answers['${q.field_key}']=this.value">`
+  }
+  else if(q.input_type==='chips'){
+    const chips = JSON.parse(typeof q.options_json==='string'?q.options_json:JSON.stringify(q.options_json)||'[]')
+    opts = `<div class="chips">${chips.map(c=>`<button class="chip${saved===c?' sel':''}" onclick="pick('${q.field_key}','${c}',this,'chip')">${c}</button>`).join('')}</div>`
+  }
+  else if(q.input_type==='cards'){
+    const cards = JSON.parse(typeof q.options_json==='string'?q.options_json:JSON.stringify(q.options_json)||'[]')
+    opts = `<div class="cards2">${cards.map(c=>`<div class="card-opt${saved===c.label?' sel':''}" onclick="pick('${q.field_key}','${c.label}',this,'card')"><span class="card-emoji">${c.emoji}</span><div class="card-label">${c.label}</div><div class="card-sub">${c.sub}</div></div>`).join('')}</div>`
+  }
+  else if(q.input_type==='scale'){
+    const lbls = ['Very low','','Moderate','','Very high']
+    opts = `<div class="scale-row">${[1,2,3,4,5].map((n,idx)=>`<button class="scale-btn${saved===String(n)?' sel':''}" onclick="pick('${q.field_key}','${n}',this,'scale')">${n}<span class="s-lbl">${lbls[idx]||''}</span></button>`).join('')}</div>`
+  }
+  else if(q.input_type==='dual_input'){
+    const cfg = typeof q.options_json==='string'?JSON.parse(q.options_json):q.options_json
+    const saved2 = answers[q.field_key]||{}
+    opts = `<div class="dual-row">
+      <div class="inp-wrap"><label>${cfg?.field1?.label||'Field 1'}</label><input class="txt-inp" placeholder="${cfg?.field1?.placeholder||''}" value="${saved2.v1||''}" oninput="setDual('${q.field_key}','v1',this.value)"></div>
+      <div class="inp-wrap"><label>${cfg?.field2?.label||'Field 2'}</label><input class="txt-inp" placeholder="${cfg?.field2?.placeholder||''}" value="${saved2.v2||''}" oninput="setDual('${q.field_key}','v2',this.value)"></div>
+    </div>`
+  }
+
+  return `
+    <div class="q-intro">
+      <div class="q-section-tag"><div class="q-section-dot"></div>${q.section_label||q.category}</div>
+      <div class="q-title">${q.question_text}</div>
+      <div class="q-sub">${q.sub_text||''}</div>
+    </div>
+    <div class="q-answer">${opts}</div>
+  `
+}
+
+function setDual(key,field,val){
+  if(!answers[key]) answers[key]={}
+  answers[key][field]=val
+}
+
+function pick(key,val,el,type){
+  answers[key]=val
+  const parent = el.closest(type==='chip'?'.chips':type==='card'?'.cards2':'.scale-row')
+  parent.querySelectorAll(type==='chip'?'.chip':type==='card'?'.card-opt':'.scale-btn').forEach(e=>e.classList.remove('sel'))
+  el.classList.add('sel')
+}
+
+// â”€â”€ NAVIGATION â”€â”€
+function next(){
+  saveText()
+
+  // check if dynamic questions already loaded
+  const hasDynamic = allQ.some(q => 
+    ['skincare','haircare','supplements'].includes(q.category)
+  )
+
+  // count only fixed questions
+  const fixedCount = allQ.filter(q => 
+    ['personal','lifestyle'].includes(q.category)
+  ).length
+
+  console.log('cur:', cur, 'fixedCount:', fixedCount, 'hasDynamic:', hasDynamic, 'total:', allQ.length)
+
+  if(!hasDynamic && cur === fixedCount - 1){
+    // just finished last fixed question â€” fetch dynamic
+    fetchDynamicQ()
+  } else if(cur === allQ.length - 1){
+    // finished all questions including dynamic â€” go to photo
+    moveToPhoto()
+  } else {
+    go(cur + 1, 'right')
+  }
+}
+
+function prev(){
+  if(cur>0) go(cur-1,'left')
+}
+
+function go(n, dir){
+  const currSlide = document.getElementById('qs' + cur)
+  const nextSlide = document.getElementById('qs' + n)
+
+  if(!currSlide || !nextSlide){
+    console.error('Slide not found â€” cur:', cur, 'next:', n)
+    return
+  }
+
+  currSlide.className = 'q-slide ' + (dir === 'right' ? 'left' : 'right')
+  cur = n
+  nextSlide.className = 'q-slide active'
+  updateUI()
+}
+function saveText(){
+  const q=allQ[cur]
+  if(q.input_type==='text'){
+    const el=document.getElementById('fi-'+q.field_key)
+    if(el) answers[q.field_key]=el.value
+  }
+}
+
+function updateUI(){
+  const q = allQ[cur]
+  if(!q) return
+
+  const total = allQ.length
+  const pct   = Math.round((cur / total) * 90)
+
+  document.getElementById('prog').style.width  = pct + '%'
+  document.getElementById('qcount').innerText  = `${cur + 1} of ${total}`
+  document.getElementById('btn-prev').disabled = cur === 0
+
+  // btn-next label
+  const hasDynamic = allQ.some(q => ['skincare','haircare','supplements'].includes(q.category))
+  const fixedCount = allQ.filter(q => ['personal','lifestyle'].includes(q.category)).length
+  const isLastFixed = !hasDynamic && cur === fixedCount - 1
+  const isLastOfAll = cur === allQ.length - 1
+
+  if(isLastOfAll){
+    document.getElementById('btn-next').innerText = 'Finish'
+  } else if(isLastFixed){
+    document.getElementById('btn-next').innerText = 'Continue'
+  } else {
+    document.getElementById('btn-next').innerText = 'Next'
+  }
+
+  // section tabs
+  const cat = q.category
+  let secIdx = 0
+  if(cat === 'personal')                                    secIdx = 0
+  else if(cat === 'lifestyle')                              secIdx = 1
+  else if(['skincare','haircare','supplements'].includes(cat)) secIdx = 2
+
+  for(let i = 0; i < 4; i++){
+    const t = document.getElementById('st' + i)
+    if(i < secIdx)        t.className = 'sec-tab done'
+    else if(i === secIdx) t.className = 'sec-tab active'
+    else                  t.className = 'sec-tab'
+  }
+}
+
+// â”€â”€ FETCH DYNAMIC QUESTIONS â”€â”€
+async function fetchDynamicQ(){
+  // show loading overlay ON TOP of existing slides
+  const wrap = document.getElementById('q-wrap')
+
+  const loadDiv = document.createElement('div')
+  loadDiv.id = 'dyn-loading'
+  loadDiv.style.cssText = 'position:absolute;inset:0;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;padding:40px;text-align:center;z-index:10;'
+  loadDiv.innerHTML = `
+    <div class="load-ring" style="width:40px;height:40px;border-width:2px;"></div>
+    <div style="font-size:14px;font-weight:600;color:var(--text);">Personalising your questions</div>
+    <div style="font-size:12px;color:var(--text3);line-height:1.6;">
+      AI is selecting the most relevant ${BCAT} questions for you...
+    </div>
+  `
+  wrap.appendChild(loadDiv)
+
+  // split answers into personal and lifestyle
+  const personalKeys = ['name','age','gender','height_weight','city','occupation','phone','email']
+  const personalAnswers = {}
+  const lifestyleAnswers = {}
+
+  allQ.forEach(q => {
+    if(personalKeys.includes(q.field_key)){
+      personalAnswers[q.field_key] = answers[q.field_key]
+    } else {
+      lifestyleAnswers[q.field_key] = answers[q.field_key]
+    }
+  })
+
+  console.log('=== FETCHING DYNAMIC QUESTIONS ===')
+  console.log('Brand category:', BCAT)
+  console.log('Personal answers:', personalAnswers)
+  console.log('Lifestyle answers:', lifestyleAnswers)
+
+  try {
+    const res = await fetch(`${API}/api/questions/select`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': AKEY
+      },
+      body: JSON.stringify({
+        personal_answers: personalAnswers,
+        lifestyle_answers: lifestyleAnswers,
+        brand_category: BCAT
+      })
+    })
+
+    console.log('Response status:', res.status)
+    const data = await res.json()
+    console.log('Dynamic Q data:', data)
+
+    // remove loading overlay
+    const loader = document.getElementById('dyn-loading')
+    if(loader) loader.remove()
+
+    if(data.success && data.section && data.section.questions.length > 0){
+
+      const dynQ = data.section.questions.map(q => ({
+        ...q,
+        section_label: data.section.label,
+        category: BCAT
+      }))
+
+      console.log('Dynamic questions received:', dynQ.length)
+
+      const startIdx = allQ.length
+
+      dynQ.forEach((q, i) => {
+        allQ.push(q)
+        const div = document.createElement('div')
+        div.className = 'q-slide right'
+        div.id = 'qs' + (startIdx + i)
+        div.innerHTML = slideHTML(q, startIdx + i)
+        wrap.appendChild(div)
+      })
+
+      console.log('Total questions now:', allQ.length)
+      console.log('Navigating to slide:', startIdx)
+
+      // small delay to ensure DOM is ready
+      setTimeout(() => {
+        go(startIdx, 'right')
+      }, 100)
+
+    } else {
+      console.warn('No dynamic questions returned:', data)
+      moveToPhoto()
+    }
+
+  } catch(e){
+    console.error('fetchDynamicQ error:', e)
+    // remove loading overlay if still there
+    const loader = document.getElementById('dyn-loading')
+    if(loader) loader.remove()
+    moveToPhoto()
+  }
+}
+// â”€â”€ PHOTO â”€â”€
+function moveToPhoto(){
+  document.getElementById('prog').style.width='94%'
+  document.getElementById('st3').className='sec-tab active'
+  showScreen('photo')
+}
+
+function onPhoto(e){
+  const file=e.target.files[0]; if(!file) return
+  const r=new FileReader()
+  r.onload=ev=>{
+    photoB64=ev.target.result
+    const img=document.getElementById('photo-prev')
+    img.src=photoB64; img.style.display='block'
+    document.getElementById('analyze-btn').style.display='block'
+  }
+  r.readAsDataURL(file)
+}
+
+
+// â”€â”€ ANALYSE â”€â”€
+async function analyse(){
+  showScreen('load')
+  document.getElementById('prog').style.width='100%'
+  ;['ld1','ld2','ld3','ld4'].forEach(id=>document.getElementById(id).classList.remove('done'))
+  ;['ld1','ld2','ld3','ld4'].forEach((id,i)=>setTimeout(()=>document.getElementById(id).classList.add('done'),i*1400))
+
+  const payload={
+    skin_type: answers.skin_type || answers.skin_concern || 'oily',
+    concerns: [answers.skin_concern || answers.skin_type || 'acne'],
+    age: answers.age || 'Not specified',
+    acne_duration: answers.concern_duration || answers.hairfall_duration || 'Not specified',
+    allergies: answers.skin_allergies || answers.food_allergies || 'None',
+    budget: answers.budget || answers.supplement_budget || 'Not specified',
+    additional_info: buildAdditionalInfo(),
+    photo_analysis: photoB64 ? 'Consumer uploaded a skin photo for visual analysis' : null,
+    all_answers: answers
+  }
+
+  try {
+    const res=await fetch(`${API}/api/recommend`,{
+      method:'POST',
+      headers:{'Content-Type':'application/json','x-api-key':AKEY},
+      body:JSON.stringify(payload)
+    })
+    const data=await res.json()
+    if(data.success) showResult(data.recommendation, data.product_images || {}, data.product_urls || {})
+    else showError(data.error)
+  } catch(e){
+    showError('Could not connect to server. Make sure your backend is running on localhost:3000')
+  }
+}
+
+function buildAdditionalInfo(){
+  const parts=[]
+  if(answers.name) parts.push(`Name: ${answers.name}`)
+  if(answers.gender) parts.push(`Gender: ${answers.gender}`)
+  if(answers.city) parts.push(`City: ${answers.city}`)
+  if(answers.occupation) parts.push(`Occupation: ${answers.occupation}`)
+  if(answers.sleep) parts.push(`Sleep: ${answers.sleep}`)
+  if(answers.water_intake) parts.push(`Water: ${answers.water_intake}`)
+  if(answers.energy_level) parts.push(`Energy: ${answers.energy_level}/5`)
+  if(answers.smoking_drinking) parts.push(`Smoking/Drinking: ${answers.smoking_drinking}`)
+  if(answers.sugar_intake) parts.push(`Sugar: ${answers.sugar_intake}`)
+  if(answers.skin_severity) parts.push(`Severity: ${answers.skin_severity}/5`)
+  if(answers.pcod) parts.push(`PCOD: ${answers.pcod}`)
+  if(answers.sun_exposure) parts.push(`Sun exposure: ${answers.sun_exposure}`)
+  if(answers.previous_treatments) parts.push(`Previous treatments: ${answers.previous_treatments}`)
+  return parts.join('. ')
+}
+
+// â”€â”€ SHOW RESULT â”€â”€
+function showResult(rec, productImages={}, productUrls={}){
+  showScreen('result')
+  const body=document.getElementById('result-body')
+
+  // concern badges
+  const badges=[answers.skin_type, answers.skin_concern, answers.age].filter(Boolean)
+  const badgeHtml=badges.map(b=>`<div class="res-badge">${b}</div>`).join('')
+
+  let html=`
+    <div class="result-shell">
+    <div class="res-hero">
+      <div class="res-hero-tag">Your Personalised Skin Report</div>
+      <div class="res-hero-title">Your skin plan is ready, ${answers.name||'friend'}</div>
+      <div class="res-hero-text">${rec.skin_assessment}</div>
+      <div class="res-concern-row">${badgeHtml}</div>
+    </div>
+  `
+
+  const routinePanels = []
+  if(rec.morning_routine?.length){
+    routinePanels.push(routinePanel({
+      type: 'am',
+      kicker: 'AM Routine',
+      title: 'Morning glow sequence',
+      note: 'Start here after cleansing. Follow the flow from left to right for a fresher day routine.',
+      steps: rec.morning_routine,
+      productImages,
+      productUrls
+    }))
+  }
+
+  if(rec.evening_routine?.length){
+    routinePanels.push(routinePanel({
+      type: 'pm',
+      kicker: 'PM Routine',
+      title: 'Night repair ritual',
+      note: 'Use this before sleep so the active products can work while your skin resets.',
+      steps: rec.evening_routine,
+      productImages,
+      productUrls
+    }))
+  }
+
+  if(routinePanels.length){
+    html+=`<div class="routine-board">${routinePanels.join('')}</div>`
+  }
+
+  const lifestyleItems = normaliseLifestyleRecommendations(rec.lifestyle_recommendations, rec.tips)
+  if(lifestyleItems.length){
+    html+=lifestyleSection(lifestyleItems)
+  }
+
+  // Warning
+  if(rec.warning){
+    html+=`<div class="warn-box">${rec.warning}</div>`
+  }
+
+  html+=`</div>`
+  body.innerHTML=html
+  body.scrollTop=0
+}
+
+function normaliseLifestyleRecommendations(items, fallbackTips=[]){
+  const source = Array.isArray(items) && items.length ? items : fallbackTips
+  return (source || []).slice(0,4).map((item, idx)=>{
+    if(typeof item === 'string'){
+      return {
+        title: ['Hydrate','Reset','Nourish','Recharge'][idx] || 'Habit',
+        action: item,
+        reason: 'A small daily habit can make your routine work harder.'
+      }
+    }
+    return {
+      title: item.title || `Habit ${idx + 1}`,
+      action: item.action || item.tip || '',
+      reason: item.reason || item.why || ''
+    }
+  }).filter(item=>item.action || item.reason)
+}
+
+function lifestyleSection(items){
+  return `
+    <div class="life-panel">
+      <div class="life-head">
+        <div>
+          <div class="life-kicker">Lifestyle habits</div>
+          <div class="life-title">Small changes, better skin days</div>
+        </div>
+        <div class="life-note">Personalised habits from your answers, designed to support your routine from the inside out.</div>
+      </div>
+      <div class="life-flow">
+        ${items.map((item, idx)=>`
+          <div class="life-card">
+            <div class="life-num">${idx + 1}</div>
+            <div class="life-card-title">${item.title}</div>
+            ${item.action?`<div class="life-action">${item.action}</div>`:''}
+            ${item.reason?`<div class="life-reason">${item.reason}</div>`:''}
+          </div>
+        `).join('')}
+      </div>
+    </div>
+  `
+}
+
+function routinePanel({type, kicker, title, note, steps, productImages, productUrls}){
+  const sizeClass = steps.length === 1 ? 'is-single' : steps.length === 2 ? 'is-two' : 'is-many'
+  return `
+    <div class="res-section routine-panel ${type} ${sizeClass}">
+      <div class="routine-heading">
+        <div class="routine-title-wrap">
+          <div class="routine-kicker">${kicker}</div>
+          <div class="routine-title">${title}</div>
+        </div>
+        <div class="routine-note">${note}</div>
+      </div>
+      ${routineFlow(steps, productImages, productUrls)}
+    </div>
+  `
+}
+
+function routineFlow(steps, productImages, productUrls){
+  return `<div class="routine-flow">${steps.map(s=>`
+    <div class="routine-step">
+      ${stepCard(s, productImages, productUrls)}
+      <div class="flow-arrow" aria-hidden="true"></div>
+    </div>
+  `).join('')}</div>`
+}
+
+function productInitials(name){
+  return (name || 'P')
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0,2)
+    .map(w=>w[0])
+    .join('')
+    .toUpperCase()
+}
+
+function stepCard(s, productImages={}, productUrls={}){
+  const img = productImages[s.product_name]
+  const url = productUrls[s.product_name]
+  const when = s.when_to_apply || s.time_to_apply
+  const media = img
+    ? `<img src="${img}" alt="${s.product_name}">`
+    : `<div class="step-placeholder">${productInitials(s.product_name)}</div>`
+  const productName = url
+    ? `<a class="step-product" href="${url}" target="_blank" rel="noopener noreferrer">${s.product_name}</a>`
+    : `<div class="step-product">${s.product_name}</div>`
+
+  return `
+    <div class="step-card">
+      <div class="step-media">
+        <div class="step-num">${s.step}</div>
+        ${media}
+      </div>
+      <div class="step-info">
+        ${productName}
+        <div class="step-category">${s.category||''}</div>
+        ${when?`<div class="step-when"><span class="step-label">Best moment</span>${when}</div>`:''}
+        ${s.how_to_use?`<div class="step-how"><span class="step-label">Glow move</span>${s.how_to_use}</div>`:''}
+        ${s.why_chosen?`<div class="step-why"><span class="step-label">Why it works</span>${s.why_chosen}</div>`:''}
+        ${s.price?`<div class="step-price">Rs. ${s.price}</div>`:''}
+      </div>
+    </div>
+  `
+}
+
+function showError(msg){
+  showScreen('result')
+  document.getElementById('result-body').innerHTML=`
+    <div style="padding:60px 28px;text-align:center;">
+      <div style="font-size:40px;margin-bottom:16px;">!</div>
+      <div style="font-family:'Instrument Serif',serif;font-size:20px;color:var(--text);margin-bottom:8px;">Something went wrong</div>
+      <div style="font-size:13px;color:var(--text3);line-height:1.7;">${msg}</div>
+      <div class="error-actions">
+        <button class="retry-btn" onclick="analyse()">Analyze Again</button>
+      </div>
+    </div>
+  `
+}
+
+function showScreen(id){
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'))
+  document.getElementById('scr-'+id).classList.add('active')
+}
+
+function showFallback(){
+  document.getElementById('q-wrap').innerHTML=`<div style="padding:32px 28px;"><div style="font-size:13px;color:var(--red);line-height:1.7;">Could not load questions from server.<br>Make sure your backend is running on localhost:3000 and the API key is correct.</div></div>`
+}
+
+function restart(){
+  allQ=[]; cur=0; answers={}; photoB64=null
+  document.getElementById('photo-prev').style.display='none'
+  document.getElementById('analyze-btn').style.display='none'
+  document.getElementById('prog').style.width='0%'
+  for(let i=0;i<4;i++) document.getElementById('st'+i).className='sec-tab'+(i===0?' active':'')
+  document.getElementById('st0').className='sec-tab active'
+  showScreen('q')
+  loadQuestions()
+}
+</script>
+</body>
+</html>
+
+
+

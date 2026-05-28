@@ -1,0 +1,638 @@
+<!-- <!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>API Test</title>
+  <style>
+    body { font-family: Arial, sans-serif; max-width: 800px; margin: 40px auto; padding: 20px; }
+    button { background: #4CAF50; color: white; padding: 10px 20px; border: none; cursor: pointer; border-radius: 5px; font-size: 16px; margin-bottom: 10px; }
+    pre { background: #f4f4f4; padding: 20px; border-radius: 5px; overflow-x: auto; white-space: pre-wrap; }
+    h2 { color: #333; }
+    .loading { color: #666; font-style: italic; }
+  </style>
+</head>
+<body>
+
+  <h2>AlphaMark AI Recommendation Test</h2>
+
+  <button onclick="testBrands()">Test Brands</button>
+  &nbsp;
+  <button onclick="testProducts()">Test Products</button>
+  &nbsp;
+  <button onclick="testRecommendation()">Test AI Recommendation</button>
+  &nbsp;
+  <button onclick="testFixedQuestions()" style="background:#2196F3;">Test Fixed Questions</button>
+  &nbsp;
+  <button onclick="testQuestionSelect()" style="background:#9C27B0;">Test AI Question Selection</button>
+
+  <p id="status"></p>
+  <pre id="result">Results will appear here...</pre>
+
+  <script>
+    const API_URL = 'http://localhost:3000'
+    const API_KEY = 'test-api-key-001'
+
+    async function testBrands() {
+      document.getElementById('status').innerText = 'Loading...'
+      const res = await fetch(`${API_URL}/api/brands/me`, {
+        headers: { 'x-api-key': API_KEY }
+      })
+      const data = await res.json()
+      document.getElementById('status').innerText = 'Done!'
+      document.getElementById('result').innerText = JSON.stringify(data, null, 2)
+    }
+
+    async function testProducts() {
+      document.getElementById('status').innerText = 'Loading...'
+      const res = await fetch(`${API_URL}/api/products`, {
+        headers: { 'x-api-key': API_KEY }
+      })
+      const data = await res.json()
+      document.getElementById('status').innerText = 'Done!'
+      document.getElementById('result').innerText = JSON.stringify(data, null, 2)
+    }
+
+    async function testRecommendation() {
+      document.getElementById('status').innerText = 'Calling Gemini AI... please wait 10-15 seconds...'
+      document.getElementById('result').innerText = 'Generating recommendation...'
+
+      const res = await fetch(`${API_URL}/api/recommend`, {
+        method: 'POST',
+        headers: {
+          'x-api-key': API_KEY,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          skin_type: 'oily',
+          concerns: ['acne'],
+          age: 24,
+          acne_duration: '6 months',
+          allergies: 'none',
+          budget: 'under 800 INR',
+          additional_info: 'I have acne on my forehead and cheeks'
+        })
+      })
+
+      const data = await res.json()
+      document.getElementById('status').innerText = 'Done!'
+      document.getElementById('result').innerText = JSON.stringify(data, null, 2)
+    }
+
+    async function testFixedQuestions() {
+      document.getElementById('status').innerText = 'Loading fixed questions...'
+      const res = await fetch(`${API_URL}/test-fixed-questions`)
+      const data = await res.json()
+      document.getElementById('status').innerText = `Done! Found ${data.total} fixed questions.`
+      document.getElementById('result').innerText = JSON.stringify(data, null, 2)
+    }
+
+    async function testQuestionSelect() {
+      document.getElementById('status').innerText = 'AI selecting questions... please wait...'
+      document.getElementById('result').innerText = 'Gemini is analysing the consumer profile and selecting questions...'
+
+      const res = await fetch(`${API_URL}/api/questions/select`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': API_KEY
+        },
+        body: JSON.stringify({
+          personal_answers: {
+            name: 'Priya',
+            age: '18–24',
+            gender: 'Female',
+            city: 'Delhi',
+            occupation: 'Student'
+          },
+          lifestyle_answers: {
+            sleep: '5–6 hrs',
+            water_intake: '1–2L',
+            energy_level: '2',
+            smoking_drinking: 'Neither',
+            sugar_intake: 'High'
+          },
+          brand_category: 'skincare'
+        })
+      })
+
+      const data = await res.json()
+      document.getElementById('status').innerText = 'Done!'
+      document.getElementById('result').innerText = JSON.stringify(data, null, 2)
+    }
+
+  </script>
+
+</body>
+</html> -->
+
+
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+
+<meta charset="UTF-8">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>AlphaMark AI</title>
+
+<style>
+
+body{
+  font-family:Arial;
+  background:#f5f5f5;
+  padding:40px;
+}
+
+.container{
+  max-width:800px;
+  margin:auto;
+  background:white;
+  padding:30px;
+  border-radius:12px;
+}
+
+.question-block{
+  margin-bottom:25px;
+}
+
+label{
+  display:block;
+  margin-bottom:10px;
+  font-weight:bold;
+}
+
+input,
+select,
+textarea{
+
+  width:100%;
+  padding:14px;
+  border:1px solid #ccc;
+  border-radius:8px;
+  font-size:16px;
+}
+
+button{
+
+  background:black;
+  color:white;
+  border:none;
+  padding:14px 24px;
+  border-radius:8px;
+  cursor:pointer;
+  margin-top:20px;
+}
+
+.result{
+  margin-top:40px;
+  background:#fafafa;
+  padding:20px;
+  border-radius:10px;
+}
+
+.product-card{
+  border:1px solid #ddd;
+  padding:15px;
+  margin-top:15px;
+  border-radius:10px;
+}
+
+.loading{
+  font-size:20px;
+  font-weight:bold;
+}
+
+</style>
+
+</head>
+
+<body>
+
+<div class="container">
+
+  <h1>AlphaMark AI Recommendation</h1>
+
+  <div id="questionsContainer"></div>
+
+  <div class="question-block">
+
+    <label>
+      Describe your problem
+    </label>
+
+    <textarea
+      id="problemDescription"
+      rows="6"
+      placeholder="Describe your issue..."
+    ></textarea>
+
+  </div>
+
+  <button onclick="generateRecommendation()">
+    Analyze My Problem
+  </button>
+
+  <div id="results" class="result"></div>
+
+</div>
+
+<script>
+
+let allQuestions = [];
+
+async function loadQuestions(){
+
+  try{
+
+    const response = await fetch(
+      "http://localhost:3000/api/questions/fixed",
+      {
+        headers: {
+          "x-api-key": "test-api-key-001"
+        }
+      }
+    );
+
+    const data = await response.json();
+
+    console.log(data);
+
+    if(!data.success){
+
+      alert(JSON.stringify(data));
+
+      return;
+    }
+
+    allQuestions = data.questions;
+
+    renderQuestions(allQuestions);
+
+  } catch(error){
+
+    console.error(error);
+
+    alert("Failed to load questions");
+  }
+}
+
+function renderQuestions(questions){
+
+  const container =
+    document.getElementById("questionsContainer");
+
+  container.innerHTML = "";
+
+  questions.forEach((question, index) => {
+
+    const questionId =
+      "question_" + index;
+
+    container.innerHTML += `
+
+      <div class="question-block">
+
+        <label>
+          ${question.question_text}
+        </label>
+
+        <input
+          type="text"
+          id="${questionId}"
+        >
+
+      </div>
+    `;
+
+    question.temp_id = questionId;
+  });
+}
+
+async function generateRecommendation(){
+
+  document.querySelector(
+    ".question-card"
+  ).innerHTML = `
+
+    <div class="loading">
+
+      Analyzing your concerns...
+      <br><br>
+
+      Building your personalized routine...
+
+    </div>
+  `;
+
+  try{
+
+    const response = await fetch(
+      "http://localhost:3000/api/recommend",
+      {
+
+        method:"POST",
+
+        headers:{
+          "Content-Type":"application/json"
+        },
+
+        body: JSON.stringify({
+
+          answers,
+
+          problem_description:
+            answers.problem_description
+        })
+      }
+    );
+
+    const data =
+      await response.json();
+
+    console.log(data);
+
+    if(!data.success){
+
+      document.querySelector(
+        ".question-card"
+      ).innerHTML = `
+
+        <div class="results">
+
+          <h2>Error</h2>
+
+          <br>
+
+          <pre>
+${JSON.stringify(data, null, 2)}
+          </pre>
+
+          <br><br>
+
+          <button
+            class="next-btn"
+            onclick="generateRecommendation()"
+          >
+            Analyze Again
+          </button>
+
+        </div>
+      `;
+
+      return;
+    }
+
+    const result = data.data;
+
+    /*
+    =====================================
+    RESULT UI
+    =====================================
+    */
+
+    document.querySelector(
+      ".question-card"
+    ).innerHTML = `
+
+      <div class="results">
+
+        <!-- ROOT CAUSES -->
+
+        <h1>
+          Root Causes
+        </h1>
+
+        <br>
+
+        <ul style="
+          line-height:2;
+          padding-left:20px;
+          font-size:18px;
+        ">
+
+          ${result.root_causes.map(cause => `
+            <li>${cause}</li>
+          `).join("")}
+
+        </ul>
+
+        <br><br>
+
+        <!-- PRODUCTS -->
+
+        <h1>
+          Recommended Products
+        </h1>
+
+        <br>
+
+        ${result.recommended_products.map(product => `
+
+          <div class="product-card">
+
+            <!-- PRODUCT IMAGE -->
+
+            <img
+              src="
+https://source.unsplash.com/600x400/?${encodeURIComponent(product.product_name)}
+              "
+
+              style="
+                width:100%;
+                border-radius:16px;
+                margin-bottom:20px;
+              "
+            >
+
+            <!-- NAME -->
+
+            <h2>
+              ${product.product_name}
+            </h2>
+
+            <br>
+
+            <!-- CATEGORY -->
+
+            <p>
+              <b>Category:</b>
+              ${product.category}
+            </p>
+
+            <br>
+
+            <!-- INGREDIENTS -->
+
+            <p>
+              <b>Ingredients:</b>
+            </p>
+
+            <ul style="
+              line-height:2;
+              padding-left:20px;
+            ">
+
+              ${product.ingredients.map(i => `
+                <li>${i}</li>
+              `).join("")}
+
+            </ul>
+
+            <br>
+
+            <!-- WHEN -->
+
+            <p>
+              <b>When to Use:</b>
+              ${product.when_to_use}
+            </p>
+
+            <br>
+
+            <!-- BUY -->
+
+            <a
+              href="${product.buy_link}"
+              target="_blank"
+              class="buy-btn"
+            >
+              Buy Product
+            </a>
+
+          </div>
+
+        `).join("")}
+
+        <br><br>
+
+        <!-- DAILY ROUTINE -->
+
+        <h1>
+          Personalized Daily Routine
+        </h1>
+
+        <br>
+
+        <!-- MORNING -->
+
+        <div class="product-card">
+
+          <h2>
+            Morning
+          </h2>
+
+          <br>
+
+          <ul style="
+            line-height:2;
+            padding-left:20px;
+          ">
+
+            ${result.daily_routine.morning.map(step => `
+              <li>${step}</li>
+            `).join("")}
+
+          </ul>
+
+        </div>
+
+        <!-- AFTERNOON -->
+
+        <div class="product-card">
+
+          <h2>
+            Afternoon
+          </h2>
+
+          <br>
+
+          <ul style="
+            line-height:2;
+            padding-left:20px;
+          ">
+
+            ${result.daily_routine.afternoon.map(step => `
+              <li>${step}</li>
+            `).join("")}
+
+          </ul>
+
+        </div>
+
+        <!-- NIGHT -->
+
+        <div class="product-card">
+
+          <h2>
+            Night
+          </h2>
+
+          <br>
+
+          <ul style="
+            line-height:2;
+            padding-left:20px;
+          ">
+
+            ${result.daily_routine.night.map(step => `
+              <li>${step}</li>
+            `).join("")}
+
+          </ul>
+
+        </div>
+
+        <br><br>
+
+        <!-- BUTTON -->
+
+        <button
+          class="next-btn"
+          onclick="location.reload()"
+          style="
+            width:100%;
+          "
+        >
+          Start New Analysis
+        </button>
+
+      </div>
+    `;
+  }
+
+  catch(error){
+
+    console.log(error);
+
+    document.querySelector(
+      ".question-card"
+    ).innerHTML = `
+
+      <div class="results">
+
+        <h2>
+          AI Analysis Failed
+        </h2>
+
+        <br>
+
+        <button
+          class="next-btn"
+          onclick="generateRecommendation()"
+        >
+          Analyze Again
+        </button>
+
+      </div>
+    `;
+  }
+}
+
+loadQuestions();
+
+</script>
+
+</body>
+</html>
