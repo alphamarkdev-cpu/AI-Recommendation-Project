@@ -1,11 +1,11 @@
 {
   "name": "alphamark-backend",
   "version": "1.0.0",
-  "description": "This repository contains a small Express-based skeleton for the AlphaMark AI Recommendation System.",
-  "main": "src/server.js",
+  "description": "AlphaMark AI Recommendation System",
+  "main": "index.js",
   "scripts": {
-    "start": "node src/server.js",
-    "dev": "nodemon src/server.js",
+    "start": "node index.js",
+    "dev": "nodemon index.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
