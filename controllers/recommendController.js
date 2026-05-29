@@ -142,7 +142,7 @@ Respond ONLY in this exact JSON â€” no markdown, no extra text:
     const text   = result.response.text()
     const clean  = text.replace(/```json|```/g, '').trim()
     const recommendation = JSON.parse(clean)
-
+    
     // â”€â”€ Step 6: Save session â”€â”€
     const { error: sessionError } = await supabase
       .from('consumer_sessions')

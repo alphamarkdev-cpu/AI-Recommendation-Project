@@ -318,14 +318,17 @@ body{background:#f3f1ec;color:var(--text);overflow:hidden;}
 .res-hero-text{font-size:clamp(17px,1.5vw,21px);line-height:1.65;max-width:860px;margin:0 auto;color:rgba(255,255,255,.86);}
 .res-concern-row{justify-content:center;}
 .res-section{width:100%;padding:0;}
-.routine-board{width:100%;display:flex;align-items:stretch;justify-content:center;gap:24px;flex-wrap:wrap;}
-.routine-panel{min-width:0;flex:1 1 520px;border:1px solid rgba(23,63,49,.12);border-radius:38px;padding:28px;background:linear-gradient(135deg,#ffffff,#f2f7f4);box-shadow:0 22px 70px rgba(17,21,19,.08);}
+.routine-board{width:100%;display:flex;flex-direction:column;gap:24px;}
+.routine-board.compact{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(420px,100%),1fr));align-items:stretch;}
+.routine-panel{width:100%;border:1px solid rgba(23,63,49,.12);border-radius:38px;padding:28px;background:linear-gradient(135deg,#ffffff,#f2f7f4);box-shadow:0 22px 70px rgba(17,21,19,.08);}
 .routine-panel.pm{background:linear-gradient(135deg,#ffffff,#f4f0ed);}
-.routine-panel.is-single{flex:0 1 500px;}
-.routine-panel.is-single .routine-note{max-width:300px;}
-.routine-panel.is-single .routine-flow{width:min(286px,100%);overflow-x:hidden;}
-.routine-panel.is-single .routine-step{flex:0 0 100%;}
-.routine-panel.is-single .step-media{aspect-ratio:1.15;}
+.routine-board.compact .routine-panel{height:100%;display:flex;flex-direction:column;padding:24px;}
+.routine-board.compact .routine-heading{align-items:flex-start;flex-direction:column;gap:10px;}
+.routine-board.compact .routine-title{font-size:clamp(30px,3vw,42px);}
+.routine-board.compact .routine-note{max-width:none;text-align:left;}
+.routine-board.compact .routine-flow{overflow:hidden;padding-bottom:4px;}
+.routine-board.compact .routine-step{flex:1 1 0;min-width:0;}
+.routine-board.compact .step-media{aspect-ratio:16/9;max-height:260px;}
 .routine-heading{display:flex;align-items:flex-end;justify-content:space-between;gap:18px;margin-bottom:20px;}
 .routine-title-wrap{min-width:0;}
 .routine-kicker{font-size:12px;font-weight:850;letter-spacing:.16em;text-transform:uppercase;color:var(--brand2);margin-bottom:8px;}
@@ -334,7 +337,7 @@ body{background:#f3f1ec;color:var(--text);overflow:hidden;}
 .routine-flow{display:flex;align-items:stretch;gap:0;width:100%;overflow-x:auto;padding:4px 4px 16px;scroll-snap-type:x mandatory;}
 .routine-flow::-webkit-scrollbar{height:8px;}
 .routine-flow::-webkit-scrollbar-thumb{background:#cbd5cf;border-radius:999px;}
-.routine-step{display:flex;align-items:center;flex:0 0 min(260px,78vw);scroll-snap-align:start;}
+.routine-step{display:flex;align-items:center;flex:0 0 min(280px,78vw);scroll-snap-align:start;}
 .routine-step:last-child .flow-arrow{display:none;}
 .flow-arrow{width:52px;display:flex;align-items:center;justify-content:center;color:var(--brand2);flex-shrink:0;}
 .flow-arrow::before{content:'';width:34px;height:1px;background:currentColor;}
@@ -398,10 +401,8 @@ body{background:#f3f1ec;color:var(--text);overflow:hidden;}
   .btn-prev,.btn-next{min-width:auto;padding:0 12px;}
   .result-shell{width:calc(100% - 28px);margin:18px auto 28px;gap:16px;}
   .res-hero{border-radius:26px;padding:30px 20px;}
-  .routine-board{gap:16px;}
+  .routine-board,.routine-board.compact{display:flex;flex-direction:column;gap:16px;}
   .routine-panel{border-radius:28px;padding:18px;}
-  .routine-panel.is-single{flex-basis:100%;}
-  .routine-panel.is-single .routine-flow{width:100%;}
   .routine-heading{align-items:flex-start;flex-direction:column;gap:10px;margin-bottom:16px;}
   .routine-note{text-align:left;font-size:13px;}
   .routine-step{flex-basis:min(268px,82vw);}
@@ -921,6 +922,7 @@ function showResult(rec, productImages={}, productUrls={}){
   `
 
   const routinePanels = []
+
   if(rec.morning_routine?.length){
     routinePanels.push(routinePanel({
       type: 'am',
@@ -946,7 +948,8 @@ function showResult(rec, productImages={}, productUrls={}){
   }
 
   if(routinePanels.length){
-    html+=`<div class="routine-board">${routinePanels.join('')}</div>`
+    const compactClass = routinePanels.every(panel=>panel.count === 1) ? ' compact' : ''
+    html+=`<div class="routine-board${compactClass}">${routinePanels.map(panel=>panel.html).join('')}</div>`
   }
 
   const lifestyleItems = normaliseLifestyleRecommendations(rec.lifestyle_recommendations, rec.tips)
@@ -1007,19 +1010,21 @@ function lifestyleSection(items){
 }
 
 function routinePanel({type, kicker, title, note, steps, productImages, productUrls}){
-  const sizeClass = steps.length === 1 ? 'is-single' : steps.length === 2 ? 'is-two' : 'is-many'
-  return `
-    <div class="res-section routine-panel ${type} ${sizeClass}">
-      <div class="routine-heading">
-        <div class="routine-title-wrap">
-          <div class="routine-kicker">${kicker}</div>
-          <div class="routine-title">${title}</div>
+  return {
+    count: steps.length,
+    html: `
+      <div class="res-section routine-panel ${type}">
+        <div class="routine-heading">
+          <div class="routine-title-wrap">
+            <div class="routine-kicker">${kicker}</div>
+            <div class="routine-title">${title}</div>
+          </div>
+          <div class="routine-note">${note}</div>
         </div>
-        <div class="routine-note">${note}</div>
+        ${routineFlow(steps, productImages, productUrls)}
       </div>
-      ${routineFlow(steps, productImages, productUrls)}
-    </div>
-  `
+    `
+  }
 }
 
 function routineFlow(steps, productImages, productUrls){
