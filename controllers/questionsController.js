@@ -141,8 +141,19 @@ Respond ONLY in this exact JSON format with no extra text:
 
   } catch (error) {
     console.error('Question selection error:', error)
-    res.status(500).json({ error: error.message })
-  }
+  
+      const fallbackQuestions = poolQuestions.slice(0, 5)
+  return res.json({
+    success: true,
+    section: {
+      section:   brand_category,
+      label:     brand_category.charAt(0).toUpperCase() + brand_category.slice(1),
+      questions: fallbackQuestions
+    },
+    reasoning: {}
+  })
+}
+  
 }
 
 module.exports = { getFixedQuestions, selectDynamicQuestions }
