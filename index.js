@@ -23,6 +23,12 @@ app.use(express.static(path.join(__dirname)))
 app.get('/widget', (req, res) => {
   res.sendFile(path.join(__dirname, 'alphamark-widget-v3.html'))
 })
+app.get('/widget-hair', (req, res) => {
+  res.sendFile(path.join(__dirname, 'alphamark-widget-hair.html'))
+})
+app.get('/widget-supplements', (req, res) => {
+  res.sendFile(path.join(__dirname, 'alphamark-widget-supplements.html'))
+})
 
 app.get('/', (req, res) => {
   res.json({ message: 'AlphaMark AI Recommendation API is running' })
