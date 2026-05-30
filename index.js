@@ -18,6 +18,8 @@ app.use('/api/brands', brandsRouter)
 app.use('/api/products', productsRouter)
 app.use('/api/recommend', recommendRouter)
 app.use('/api/questions', questionsRouter)
+// Serves public embed scripts such as the Shopify storefront widget loader.
+app.use('/public', express.static(path.join(__dirname, 'public')))
 app.use(express.static(path.join(__dirname)))
 
 // Serves the default skincare widget HTML file to the browser.

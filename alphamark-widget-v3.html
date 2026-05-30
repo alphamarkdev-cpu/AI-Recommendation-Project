@@ -26,6 +26,8 @@
 }
 
 body{font-family:'Sora',sans-serif;background:#0f2318;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;overflow:hidden;}
+body.embed-mode{background:transparent;}
+body.embed-mode .brand-hero{display:none;}
 
 /* . BRAND PAGE . */
 .brand-hero{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:linear-gradient(160deg,#0a1a0f 0%,#1B4332 60%,#0f2318 100%);}
@@ -522,9 +524,13 @@ body{background:#f3f1ec;color:var(--text);overflow:hidden;}
 </div>
 
 <script>
-const API   = window.location.origin
-const AKEY  = 'test-api-key-001'
-const BCAT  = 'skincare' // change per brand
+const WIDGET_PARAMS = new URLSearchParams(window.location.search)
+const EMBED_MODE = WIDGET_PARAMS.get('embed') === '1'
+const API   = WIDGET_PARAMS.get('api_url') || window.location.origin
+const AKEY  = WIDGET_PARAMS.get('brand_key') || 'test-api-key-001'
+const BCAT  = WIDGET_PARAMS.get('brand_category') || 'skincare'
+
+if(EMBED_MODE) document.body.classList.add('embed-mode')
 
 // . STATE .
 let allQ    = []   // all questions loaded from DB
@@ -552,6 +558,10 @@ function openWidget(){
 }
 // Closes the widget overlay without clearing the user's current progress.
 function closeWidget(){
+  if(EMBED_MODE && window.parent){
+    window.parent.postMessage({ type: 'alphamark:close' }, '*')
+    return
+  }
   document.getElementById('overlay').classList.remove('open')
 }
 
@@ -1180,7 +1190,7 @@ function showScreen(id){
 
 // Shows fallback products when a full AI recommendation cannot be displayed.
 function showFallback(){
-  document.getElementById('q-wrap').innerHTML=`<div style="padding:32px 28px;"><div style="font-size:13px;color:var(--red);line-height:1.7;">Could not load questions from server.<br>Make sure your backend is running on localhost:3000 and the API key is correct.</div></div>`
+  document.getElementById('q-wrap').innerHTML=`<div style="padding:32px 28px;"><div style="font-size:13px;color:var(--red);line-height:1.7;">Could not load questions from server.<br>Make sure the backend URL and brand API key are correct.</div></div>`
 }
 
 // Resets local widget state so the user can start the assessment again.
@@ -1193,6 +1203,10 @@ function restart(){
   document.getElementById('st0').className='sec-tab active'
   showScreen('q')
   loadQuestions()
+}
+
+if(EMBED_MODE){
+  openWidget()
 }
 </script>
 </body>
