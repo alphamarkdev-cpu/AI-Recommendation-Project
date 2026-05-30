@@ -1,5 +1,6 @@
 const { GoogleGenerativeAI } = require('@google/generative-ai')
 const supabase = require('../config/supabase')
+const { formatGeminiUsage } = require('../utils/geminiUsage')
 require('dotenv').config()
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY)
@@ -35,15 +36,16 @@ const getFixedQuestions = async (req, res) => {
 
 // ── AI SELECT DYNAMIC QUESTIONS ──
 const selectDynamicQuestions = async (req, res) => {
-  try {
-    const { personal_answers, lifestyle_answers, brand_category } = req.body
+  const { personal_answers, lifestyle_answers, brand_category } = req.body
+  let poolQuestions = []
 
+  try {
     if (!brand_category) {
       return res.status(400).json({ error: 'brand_category is required' })
     }
 
     // Step 1 — fetch all questions for this category from pool
-    const { data: poolQuestions, error } = await supabase
+    const { data, error } = await supabase
       .from('question_bank')
       .select('*')
       .eq('category', brand_category)
@@ -51,6 +53,7 @@ const selectDynamicQuestions = async (req, res) => {
       .order('display_order')
 
     if (error) throw error
+    poolQuestions = data || []
 
     if (!poolQuestions || poolQuestions.length === 0) {
       return res.status(404).json({
@@ -110,9 +113,12 @@ Respond ONLY in this exact JSON format with no extra text:
     // Step 3 — call Gemini
     const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' })
     const result = await model.generateContent(prompt)
+    const aiUsage = formatGeminiUsage(result.response.usageMetadata)
     const responseText = result.response.text()
     const cleaned = responseText.replace(/```json|```/g, '').trim()
     const aiResponse = JSON.parse(cleaned)
+
+    console.log('Gemini token usage - question selection:', aiUsage)
 
     // Step 4 — fetch the selected questions in order
     const selectedIds = aiResponse.selected_question_ids
@@ -136,23 +142,37 @@ Respond ONLY in this exact JSON format with no extra text:
         label: brand_category.charAt(0).toUpperCase() + brand_category.slice(1),
         questions: selectedQuestions
       },
-      reasoning: aiResponse.reasoning
+      reasoning: aiResponse.reasoning,
+      ai_usage: aiUsage
     })
 
   } catch (error) {
     console.error('Question selection error:', error)
-  
-      const fallbackQuestions = poolQuestions.slice(0, 5)
-  return res.json({
-    success: true,
-    section: {
-      section:   brand_category,
-      label:     brand_category.charAt(0).toUpperCase() + brand_category.slice(1),
-      questions: fallbackQuestions
-    },
-    reasoning: {}
-  })
-}
+
+    if (!poolQuestions.length) {
+      return res.status(500).json({
+        success: false,
+        error: error.message
+      })
+    }
+
+    const fallbackQuestions = poolQuestions.slice(0, 5)
+    return res.json({
+      success: true,
+      section: {
+        section: brand_category,
+        label: brand_category.charAt(0).toUpperCase() + brand_category.slice(1),
+        questions: fallbackQuestions
+      },
+      reasoning: {},
+      ai_usage: {
+        input_tokens: 0,
+        output_tokens: 0,
+        total_tokens: 0,
+        cached_tokens: 0
+      }
+    })
+  }
   
 }
 

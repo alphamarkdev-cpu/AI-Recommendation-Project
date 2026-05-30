@@ -522,7 +522,7 @@ body{background:#f3f1ec;color:var(--text);overflow:hidden;}
 </div>
 
 <script>
-const API   = 'https://ai-recommendation-project-production.up.railway.app'
+const API   = window.location.origin
 const AKEY  = 'test-api-key-001'
 const BCAT  = 'skincare' // change per brand
 
@@ -531,6 +531,10 @@ let allQ    = []   // all questions loaded from DB
 let cur     = 0
 let answers = {}
 let photoB64= null
+let tokenUsage = {
+  question_selection: null,
+  recommendation: null
+}
 
 const SECTIONS = ['About You','Lifestyle','Skin Health','Assessment']
 
@@ -784,6 +788,10 @@ async function fetchDynamicQ(){
     console.log('Response status:', res.status)
     const data = await res.json()
     console.log('Dynamic Q data:', data)
+    tokenUsage.question_selection = data.ai_usage || null
+    if(tokenUsage.question_selection){
+      console.log('Question selection token usage:', tokenUsage.question_selection)
+    }
 
     // remove loading overlay
     const loader = document.getElementById('dyn-loading')
@@ -867,6 +875,7 @@ async function analyse(){
     budget: answers.budget || answers.supplement_budget || 'Not specified',
     additional_info: buildAdditionalInfo(),
     photo_analysis: photoB64 ? 'Consumer uploaded a skin photo for visual analysis' : null,
+    photo_image: photoB64,
     all_answers: answers
   }
 
@@ -877,7 +886,11 @@ async function analyse(){
       body:JSON.stringify(payload)
     })
     const data=await res.json()
-    if(data.success) showResult(data.recommendation, data.product_images || {}, data.product_urls || {})
+    if(data.success){
+      tokenUsage.recommendation = data.ai_usage || null
+      logSessionTokenUsage()
+      showResult(data.recommendation, data.product_images || {}, data.product_urls || {}, tokenUsage)
+    }
     else showError(data.error)
   } catch(e){
     showError('Could not connect to server. Make sure your backend is running on localhost:3000')
@@ -903,7 +916,7 @@ function buildAdditionalInfo(){
 }
 
 // â”€â”€ SHOW RESULT â”€â”€
-function showResult(rec, productImages={}, productUrls={}){
+function showResult(rec, productImages={}, productUrls={}, usage={}){
   showScreen('result')
   const body=document.getElementById('result-body')
 
@@ -919,6 +932,7 @@ function showResult(rec, productImages={}, productUrls={}){
       <div class="res-hero-text">${rec.skin_assessment}</div>
       <div class="res-concern-row">${badgeHtml}</div>
     </div>
+    ${tokenUsagePanel(usage)}
   `
 
   const routinePanels = []
@@ -965,6 +979,39 @@ function showResult(rec, productImages={}, productUrls={}){
   html+=`</div>`
   body.innerHTML=html
   body.scrollTop=0
+}
+
+function tokenUsagePanel(usage={}){
+  const q = usage.question_selection
+  const r = usage.recommendation
+  if(!q && !r) return ''
+
+  const questionTotal = q?.total_tokens || 0
+  const recommendationTotal = r?.total_tokens || 0
+  const total = questionTotal + recommendationTotal
+
+  return `
+    <div style="margin:16px 0;padding:14px 16px;border:1px solid var(--line);border-radius:8px;background:#fff;font-size:12px;color:var(--text2);line-height:1.7;">
+      <div style="font-weight:800;text-transform:uppercase;letter-spacing:.08em;color:var(--green);margin-bottom:6px;">AI Token Usage</div>
+      <div>Question selection: ${questionTotal}</div>
+      <div>Recommendation: ${recommendationTotal}</div>
+      <div style="font-weight:800;color:var(--text);">Session total: ${total}</div>
+    </div>
+  `
+}
+
+function logSessionTokenUsage(){
+  const q = tokenUsage.question_selection
+  const r = tokenUsage.recommendation
+  const rows = []
+
+  if(q) rows.push({ call: 'question_selection', ...q })
+  if(r) rows.push({ call: 'recommendation', ...r })
+
+  if(rows.length) {
+    console.table(rows)
+    console.log('Session total tokens:', (q?.total_tokens || 0) + (r?.total_tokens || 0))
+  }
 }
 
 function normaliseLifestyleRecommendations(items, fallbackTips=[]){

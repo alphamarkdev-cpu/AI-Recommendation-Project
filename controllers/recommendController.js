@@ -1,9 +1,22 @@
 ﻿const { GoogleGenerativeAI } = require('@google/generative-ai')
 const supabase = require('../config/supabase')
 const { getMatchingProducts } = require('./productsController')
+const { formatGeminiUsage } = require('../utils/geminiUsage')
 require('dotenv').config()
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY)
+
+const parseDataUrlImage = dataUrl => {
+  if (!dataUrl || typeof dataUrl !== 'string') return null
+
+  const match = dataUrl.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$/)
+  if (!match) return null
+
+  return {
+    mimeType: match[1],
+    data: match[2]
+  }
+}
 
 const getRecommendation = async (req, res) => {
   try {
@@ -16,6 +29,7 @@ const getRecommendation = async (req, res) => {
       budget,
       additional_info,
       photo_analysis,
+      photo_image,
       all_answers
     } = req.body
 
@@ -24,6 +38,7 @@ const getRecommendation = async (req, res) => {
 
     const skinTypes    = Array.isArray(skin_type) ? skin_type : [skin_type]
     const concernsList = Array.isArray(concerns)  ? concerns  : [concerns]
+    const photoImage = parseDataUrlImage(photo_image)
 
     // â”€â”€ Step 1: Fetch matching products â”€â”€
     const matchingProducts = await getMatchingProducts(brandId, skinTypes, concernsList)
@@ -68,18 +83,19 @@ CONSUMER PROFILE:
 - Known allergies: ${allergies || 'None'}
 - Budget: ${budget || 'Not specified'}
 - Details: ${additional_info || 'None'}
-- Photo: ${photo_analysis || 'Not provided'}
+- Photo: ${photoImage ? 'Uploaded skin photo is attached for visual analysis' : 'Not provided'}
 
 AVAILABLE PRODUCTS IN DATABASE (ONLY use these â€” do NOT invent products):
 ${JSON.stringify(productsContext, null, 2)}
 
 YOUR TASK:
-1. Pick the best 3-4 products from the list above that match this consumer
-2. Skip any product with ingredients the consumer is allergic to
-3. Build a morning AND evening routine using only those products
-4. Keep all text SHORT, CLEAR, and consumer-friendly
-5. Write routine copy like a premium skincare card: benefit-led, warm, and easy to scan
-6. Add lifestyle recommendations based on the consumer's sleep, water, diet, stress, activity, city, occupation, smoking/drinking, sugar intake, and other lifestyle answers
+1. If a photo is attached, inspect visible skin signs such as oiliness, redness, acne, texture, marks, dryness, and irritation
+2. Pick the best 3-4 products from the list above that match this consumer
+3. Skip any product with ingredients the consumer is allergic to
+4. Build a morning AND evening routine using only those products
+5. Keep all text SHORT, CLEAR, and consumer-friendly
+6. Write routine copy like a premium skincare card: benefit-led, warm, and easy to scan
+7. Add lifestyle recommendations based on the consumer's sleep, water, diet, stress, activity, city, occupation, smoking/drinking, sugar intake, and other lifestyle answers
 
 STRICT RULES:
 - skin_assessment: MAX 2 sentences â€” be specific about their concern
@@ -138,10 +154,24 @@ Respond ONLY in this exact JSON â€” no markdown, no extra text:
 
     // â”€â”€ Step 5: Call Gemini â”€â”€
     const model  = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' })
-    const result = await model.generateContent(prompt)
+    const request = photoImage
+      ? [
+          { text: prompt },
+          {
+            inlineData: {
+              mimeType: photoImage.mimeType,
+              data: photoImage.data
+            }
+          }
+        ]
+      : prompt
+    const result = await model.generateContent(request)
+    const aiUsage = formatGeminiUsage(result.response.usageMetadata)
     const text   = result.response.text()
     const clean  = text.replace(/```json|```/g, '').trim()
     const recommendation = JSON.parse(clean)
+
+    console.log('Gemini token usage - recommendation:', aiUsage)
     
     // â”€â”€ Step 6: Save session â”€â”€
     const { error: sessionError } = await supabase
@@ -155,7 +185,9 @@ Respond ONLY in this exact JSON â€” no markdown, no extra text:
           additional_info,
           ...(all_answers || {})
         },
-        photo_analysis_json:     photo_analysis ? { result: photo_analysis } : null,
+        photo_analysis_json: photoImage
+          ? { result: photo_analysis, mime_type: photoImage.mimeType }
+          : null,
         recommended_product_ids: matchingProducts.map(p => p.product_id)
       })
 
@@ -166,7 +198,9 @@ Respond ONLY in this exact JSON â€” no markdown, no extra text:
       success: true,
       recommendation,
       product_images: productImages,
-      product_urls:   productUrls
+      product_urls:   productUrls,
+      photo_used: Boolean(photoImage),
+      ai_usage: aiUsage
     })
 
   } catch (error) {
