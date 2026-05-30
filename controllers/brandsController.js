@@ -1,5 +1,6 @@
 const supabase = require('../config/supabase')
 
+// Fetches the authenticated brand profile attached by the API-key middleware.
 const getBrand = async (req, res) => {
   try {
     const { data, error } = await supabase

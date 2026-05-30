@@ -27,7 +27,7 @@
 
 body{font-family:'Sora',sans-serif;background:#0f2318;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;overflow:hidden;}
 
-/* â”€â”€ BRAND PAGE â”€â”€ */
+/* . BRAND PAGE . */
 .brand-hero{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:linear-gradient(160deg,#0a1a0f 0%,#1B4332 60%,#0f2318 100%);}
 .brand-hero::before{content:'';position:absolute;inset:0;background:url("data:image/svg+xml,%3Csvg width='80' height='80' viewBox='0 0 80 80' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='%2395D5B2' fill-opacity='0.04'%3E%3Ccircle cx='40' cy='40' r='1'/%3E%3C/g%3E%3C/svg%3E");}
 .brand-wordmark{font-family:'Instrument Serif',serif;font-size:72px;color:#fff;letter-spacing:-2px;margin-bottom:8px;opacity:0;animation:heroFade 1s ease 0.3s forwards;}
@@ -42,17 +42,17 @@ body{font-family:'Sora',sans-serif;background:#0f2318;min-height:100vh;display:f
 .stat-label{font-size:11px;color:rgba(255,255,255,0.4);letter-spacing:0.1em;text-transform:uppercase;margin-top:2px;}
 @keyframes heroFade{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
 
-/* â”€â”€ OVERLAY â”€â”€ */
+/* . OVERLAY . */
 #overlay{position:fixed;inset:0;background:rgba(10,26,15,0.7);z-index:100;display:none;align-items:center;justify-content:center;backdrop-filter:blur(12px);animation:overlayIn 0.3s ease;}
 #overlay.open{display:flex;}
 @keyframes overlayIn{from{opacity:0}to{opacity:1}}
 
-/* â”€â”€ PANEL â”€â”€ */
+/* . PANEL . */
 .panel{width:100%;max-width:480px;height:90vh;max-height:820px;background:var(--bg);border-radius:24px;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 40px 100px rgba(0,0,0,0.4);animation:panelUp 0.5s cubic-bezier(0.34,1.56,0.64,1);}
 @keyframes panelUp{from{transform:translateY(60px) scale(0.96);opacity:0}to{transform:none;opacity:1}}
 @media(max-width:520px){.panel{height:100vh;max-height:none;border-radius:0;}}
 
-/* â”€â”€ HEADER â”€â”€ */
+/* . HEADER . */
 .hdr{background:var(--brand);padding:0 20px;flex-shrink:0;}
 .hdr-top{display:flex;align-items:center;justify-content:space-between;padding:16px 0 14px;}
 .hdr-brand{display:flex;align-items:center;gap:10px;}
@@ -63,22 +63,22 @@ body{font-family:'Sora',sans-serif;background:#0f2318;min-height:100vh;display:f
 .hdr-close{background:rgba(255,255,255,0.1);border:none;border-radius:50%;width:32px;height:32px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:rgba(255,255,255,0.7);transition:all 0.2s;}
 .hdr-close:hover{background:rgba(255,255,255,0.2);color:#fff;}
 
-/* â”€â”€ SECTION TABS â”€â”€ */
+/* . SECTION TABS . */
 .sec-tabs{display:flex;gap:4px;padding:0 0 14px;}
 .sec-tab{flex:1;padding:8px 4px;border-radius:8px;font-size:10px;font-weight:600;letter-spacing:0.04em;text-align:center;color:rgba(255,255,255,0.35);background:rgba(255,255,255,0.08);transition:all 0.3s;cursor:default;line-height:1.3;}
 .sec-tab.done{color:rgba(255,255,255,0.6);background:rgba(255,255,255,0.12);}
 .sec-tab.done::after{content:' âœ“';}
 .sec-tab.active{background:#fff;color:var(--brand);}
 
-/* â”€â”€ PROGRESS â”€â”€ */
+/* . PROGRESS . */
 .prog-bar{height:3px;background:rgba(255,255,255,0.1);}
 .prog-fill{height:100%;background:var(--accent);transition:width 0.5s cubic-bezier(0.4,0,0.2,1);}
 
-/* â”€â”€ SCREENS â”€â”€ */
+/* . SCREENS . */
 .screen{display:none;flex-direction:column;flex:1;overflow:hidden;}
 .screen.active{display:flex;}
 
-/* â”€â”€ QUESTION SCREEN â”€â”€ */
+/* . QUESTION SCREEN . */
 .q-wrap{flex:1;position:relative;overflow:hidden;}
 .q-slide{position:absolute;inset:0;padding:32px 28px 24px;overflow-y:auto;display:flex;flex-direction:column;transition:transform 0.38s cubic-bezier(0.4,0,0.2,1),opacity 0.38s ease;}
 .q-slide::-webkit-scrollbar{width:3px;}
@@ -124,7 +124,7 @@ body{font-family:'Sora',sans-serif;background:#0f2318;min-height:100vh;display:f
 .dual-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
 .dual-row .inp-wrap label{font-size:11px;font-weight:600;color:var(--text3);letter-spacing:0.06em;text-transform:uppercase;display:block;margin-bottom:6px;}
 
-/* â”€â”€ BOTTOM NAV â”€â”€ */
+/* . BOTTOM NAV . */
 .bot-nav{padding:14px 24px 18px;border-top:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-shrink:0;background:var(--white);}
 .btn-prev{display:flex;align-items:center;gap:6px;background:none;border:1.5px solid var(--border);border-radius:32px;padding:10px 18px;font-size:12.5px;font-weight:600;color:var(--text2);cursor:pointer;transition:all 0.2s;font-family:'Sora',sans-serif;}
 .btn-prev:hover:not(:disabled){border-color:var(--brand);color:var(--brand);}
@@ -133,7 +133,7 @@ body{font-family:'Sora',sans-serif;background:#0f2318;min-height:100vh;display:f
 .btn-next:hover{background:var(--brand2);transform:translateX(2px);}
 .q-count{font-size:11px;color:var(--text3);font-weight:500;}
 
-/* â”€â”€ PHOTO SCREEN â”€â”€ */
+/* . PHOTO SCREEN . */
 .photo-body{flex:1;padding:32px 28px 24px;overflow-y:auto;display:flex;flex-direction:column;}
 .upload-box{border:2px dashed var(--border);border-radius:16px;padding:32px 24px;text-align:center;cursor:pointer;transition:all 0.2s;background:var(--surface);margin-bottom:12px;flex-shrink:0;}
 .upload-box:hover{border-color:var(--brand2);background:#f0faf5;}
@@ -147,7 +147,7 @@ body{font-family:'Sora',sans-serif;background:#0f2318;min-height:100vh;display:f
 .skip-link{width:100%;padding:12px;background:none;border:1.5px solid var(--border);border-radius:32px;font-family:'Sora',sans-serif;font-size:13px;font-weight:500;color:var(--text3);cursor:pointer;transition:all 0.2s;}
 .skip-link:hover{border-color:var(--brand);color:var(--brand);}
 
-/* â”€â”€ LOADING SCREEN â”€â”€ */
+/* . LOADING SCREEN . */
 .load-body{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px;text-align:center;}
 .load-ring{width:56px;height:56px;border:3px solid var(--border);border-top-color:var(--brand2);border-radius:50%;animation:spin 1s linear infinite;margin-bottom:24px;}
 @keyframes spin{to{transform:rotate(360deg)}}
@@ -159,7 +159,7 @@ body{font-family:'Sora',sans-serif;background:#0f2318;min-height:100vh;display:f
 .ld{width:8px;height:8px;border-radius:50%;background:var(--border);flex-shrink:0;transition:background 0.4s;}
 .ld.done{background:var(--brand2);}
 
-/* â”€â”€ RESULT SCREEN â”€â”€ */
+/* . RESULT SCREEN . */
 .result-body{flex:1;overflow-y:auto;padding:0;}
 .result-body::-webkit-scrollbar{width:3px;}
 .result-body::-webkit-scrollbar-thumb{background:#ddd;border-radius:2px;}
@@ -526,7 +526,7 @@ const API   = window.location.origin
 const AKEY  = 'test-api-key-001'
 const BCAT  = 'skincare' // change per brand
 
-// â”€â”€ STATE â”€â”€
+// . STATE .
 let allQ    = []   // all questions loaded from DB
 let cur     = 0
 let answers = {}
@@ -538,7 +538,8 @@ let tokenUsage = {
 
 const SECTIONS = ['About You','Lifestyle','Skin Health','Assessment']
 
-// â”€â”€ OPEN / CLOSE â”€â”€
+// . OPEN / CLOSE .
+// Opens the widget shell and loads questions the first time the user starts.
 function openWidget(){
   document.getElementById('overlay').classList.add('open')
     const labels = {
@@ -549,11 +550,13 @@ function openWidget(){
   document.getElementById('st2').innerText = labels[BCAT] || 'Analysis'
   if(allQ.length===0) loadQuestions()
 }
+// Closes the widget overlay without clearing the user's current progress.
 function closeWidget(){
   document.getElementById('overlay').classList.remove('open')
 }
 
-// â”€â”€ LOAD QUESTIONS FROM BACKEND â”€â”€
+// . LOAD QUESTIONS FROM BACKEND .
+// Loads fixed questions for the current brand and prepares the first screen.
 async function loadQuestions(){
   showScreen('q')
   document.getElementById('q-wrap').innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:100%;flex-direction:column;gap:12px;color:var(--text3);font-size:13px;"><div class="load-ring" style="width:36px;height:36px;border-width:2px;"></div>Loading your questionnaire...</div>`
@@ -580,7 +583,8 @@ async function loadQuestions(){
   }
 }
 
-// â”€â”€ BUILD SLIDES â”€â”€
+// . BUILD SLIDES .
+// Renders one slide for each loaded question into the quiz wrapper.
 function buildSlides(){
   const wrap = document.getElementById('q-wrap')
   wrap.innerHTML = ''
@@ -593,6 +597,7 @@ function buildSlides(){
   })
 }
 
+// Builds the HTML for a single question slide based on its answer type.
 function slideHTML(q,i){
   const saved = answers[q.field_key]
   let opts = ''
@@ -631,11 +636,13 @@ function slideHTML(q,i){
   `
 }
 
+// Stores one half of a two-field answer, such as age value plus age unit.
 function setDual(key,field,val){
   if(!answers[key]) answers[key]={}
   answers[key][field]=val
 }
 
+// Saves a selected answer and updates the active visual state for option controls.
 function pick(key,val,el,type){
   answers[key]=val
   const parent = el.closest(type==='chip'?'.chips':type==='card'?'.cards2':'.scale-row')
@@ -643,7 +650,8 @@ function pick(key,val,el,type){
   el.classList.add('sel')
 }
 
-// â”€â”€ NAVIGATION â”€â”€
+// . NAVIGATION .
+// Moves forward through the quiz and triggers dynamic questions after fixed answers.
 function next(){
   saveText()
 
@@ -670,10 +678,12 @@ function next(){
   }
 }
 
+// Moves backward through the quiz or returns from the photo screen to the last question.
 function prev(){
   if(cur>0) go(cur-1,'left')
 }
 
+// Animates navigation between question slides and refreshes progress controls.
 function go(n, dir){
   const currSlide = document.getElementById('qs' + cur)
   const nextSlide = document.getElementById('qs' + n)
@@ -688,6 +698,7 @@ function go(n, dir){
   nextSlide.className = 'q-slide active'
   updateUI()
 }
+// Persists text or textarea input from the active question into the answers object.
 function saveText(){
   const q=allQ[cur]
   if(q.input_type==='text'){
@@ -696,6 +707,7 @@ function saveText(){
   }
 }
 
+// Updates progress, section tabs, and navigation button labels for the current step.
 function updateUI(){
   const q = allQ[cur]
   if(!q) return
@@ -736,7 +748,8 @@ function updateUI(){
   }
 }
 
-// â”€â”€ FETCH DYNAMIC QUESTIONS â”€â”€
+// . FETCH DYNAMIC QUESTIONS .
+// Sends fixed answers to the backend so Gemini can select dynamic follow-up questions.
 async function fetchDynamicQ(){
   // show loading overlay ON TOP of existing slides
   const wrap = document.getElementById('q-wrap')
@@ -786,7 +799,16 @@ async function fetchDynamicQ(){
     })
 
     console.log('Response status:', res.status)
-    const data = await res.json()
+    const responseText = await res.text()
+    let data
+
+    try {
+      data = JSON.parse(responseText)
+    } catch(e) {
+      console.error('Dynamic question response was not JSON:', responseText)
+      throw e
+    }
+
     console.log('Dynamic Q data:', data)
     tokenUsage.question_selection = data.ai_usage || null
     if(tokenUsage.question_selection){
@@ -839,13 +861,15 @@ async function fetchDynamicQ(){
     moveToPhoto()
   }
 }
-// â”€â”€ PHOTO â”€â”€
+// . PHOTO .
+// Moves the user from questions to the optional photo-upload screen.
 function moveToPhoto(){
   document.getElementById('prog').style.width='94%'
   document.getElementById('st3').className='sec-tab active'
   showScreen('photo')
 }
 
+// Reads the selected photo as a base64 data URL and shows the preview.
 function onPhoto(e){
   const file=e.target.files[0]; if(!file) return
   const r=new FileReader()
@@ -859,7 +883,8 @@ function onPhoto(e){
 }
 
 
-// â”€â”€ ANALYSE â”€â”€
+// . ANALYSE .
+// Sends the completed answers and optional photo to the backend recommendation API.
 async function analyse(){
   showScreen('load')
   document.getElementById('prog').style.width='100%'
@@ -897,6 +922,7 @@ async function analyse(){
   }
 }
 
+// Condenses lifestyle and personal answers into a short prompt-friendly summary.
 function buildAdditionalInfo(){
   const parts=[]
   if(answers.name) parts.push(`Name: ${answers.name}`)
@@ -915,7 +941,8 @@ function buildAdditionalInfo(){
   return parts.join('. ')
 }
 
-// â”€â”€ SHOW RESULT â”€â”€
+// . SHOW RESULT .
+// Renders the final personalized report, routines, lifestyle cards, and token usage.
 function showResult(rec, productImages={}, productUrls={}, usage={}){
   showScreen('result')
   const body=document.getElementById('result-body')
@@ -981,6 +1008,7 @@ function showResult(rec, productImages={}, productUrls={}, usage={}){
   body.scrollTop=0
 }
 
+// Builds the small debug panel showing Gemini token usage for this session.
 function tokenUsagePanel(usage={}){
   const q = usage.question_selection
   const r = usage.recommendation
@@ -1000,6 +1028,7 @@ function tokenUsagePanel(usage={}){
   `
 }
 
+// Prints token usage rows to the browser console for debugging model cost.
 function logSessionTokenUsage(){
   const q = tokenUsage.question_selection
   const r = tokenUsage.recommendation
@@ -1014,6 +1043,7 @@ function logSessionTokenUsage(){
   }
 }
 
+// Converts AI lifestyle output or fallback tips into a consistent card data shape.
 function normaliseLifestyleRecommendations(items, fallbackTips=[]){
   const source = Array.isArray(items) && items.length ? items : fallbackTips
   return (source || []).slice(0,4).map((item, idx)=>{
@@ -1032,6 +1062,7 @@ function normaliseLifestyleRecommendations(items, fallbackTips=[]){
   }).filter(item=>item.action || item.reason)
 }
 
+// Renders the lifestyle recommendation section for the result page.
 function lifestyleSection(items){
   return `
     <div class="life-panel">
@@ -1056,6 +1087,7 @@ function lifestyleSection(items){
   `
 }
 
+// Builds a complete morning or evening routine panel.
 function routinePanel({type, kicker, title, note, steps, productImages, productUrls}){
   return {
     count: steps.length,
@@ -1074,6 +1106,7 @@ function routinePanel({type, kicker, title, note, steps, productImages, productU
   }
 }
 
+// Creates the horizontal product flow for routine steps.
 function routineFlow(steps, productImages, productUrls){
   return `<div class="routine-flow">${steps.map(s=>`
     <div class="routine-step">
@@ -1083,6 +1116,7 @@ function routineFlow(steps, productImages, productUrls){
   `).join('')}</div>`
 }
 
+// Generates fallback initials when a product image is unavailable.
 function productInitials(name){
   return (name || 'P')
     .split(/\s+/)
@@ -1093,6 +1127,7 @@ function productInitials(name){
     .toUpperCase()
 }
 
+// Renders one product recommendation card with image, usage, and link.
 function stepCard(s, productImages={}, productUrls={}){
   const img = productImages[s.product_name]
   const url = productUrls[s.product_name]
@@ -1122,6 +1157,7 @@ function stepCard(s, productImages={}, productUrls={}){
   `
 }
 
+// Shows a recoverable error screen with the supplied message.
 function showError(msg){
   showScreen('result')
   document.getElementById('result-body').innerHTML=`
@@ -1136,15 +1172,18 @@ function showError(msg){
   `
 }
 
+// Activates one top-level widget screen and hides the others.
 function showScreen(id){
   document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'))
   document.getElementById('scr-'+id).classList.add('active')
 }
 
+// Shows fallback products when a full AI recommendation cannot be displayed.
 function showFallback(){
   document.getElementById('q-wrap').innerHTML=`<div style="padding:32px 28px;"><div style="font-size:13px;color:var(--red);line-height:1.7;">Could not load questions from server.<br>Make sure your backend is running on localhost:3000 and the API key is correct.</div></div>`
 }
 
+// Resets local widget state so the user can start the assessment again.
 function restart(){
   allQ=[]; cur=0; answers={}; photoB64=null
   document.getElementById('photo-prev').style.display='none'

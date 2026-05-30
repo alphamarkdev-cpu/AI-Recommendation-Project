@@ -1,3 +1,4 @@
+// Normalizes Gemini usageMetadata into the token fields displayed by the widget.
 const formatGeminiUsage = (usageMetadata = {}) => {
   const inputTokens = usageMetadata.promptTokenCount || 0
   const outputTokens = usageMetadata.candidatesTokenCount || 0

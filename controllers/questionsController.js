@@ -5,7 +5,74 @@ require('dotenv').config()
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY)
 
+const emptyUsage = {
+  input_tokens: 0,
+  output_tokens: 0,
+  thinking_tokens: 0,
+  other_tokens: 0,
+  total_tokens: 0,
+  cached_tokens: 0
+}
+
+// Parses Gemini JSON output, including responses wrapped in markdown code fences.
+const parseJsonResponse = text => {
+  const cleaned = text.replace(/```json|```/g, '').trim()
+
+  try {
+    return JSON.parse(cleaned)
+  } catch (error) {
+    const start = cleaned.indexOf('{')
+    const end = cleaned.lastIndexOf('}')
+
+    if (start === -1 || end === -1 || end <= start) {
+      throw error
+    }
+
+    return JSON.parse(cleaned.slice(start, end + 1))
+  }
+}
+
+// Builds the final dynamic-question response and fills any missing AI selections with fallback questions.
+const buildQuestionResponse = (brandCategory, poolQuestions, selectedIds = [], reasoning = {}, aiUsage = emptyUsage) => {
+  const used = new Set()
+  const selectedQuestions = []
+
+  selectedIds.forEach(id => {
+    const q = poolQuestions.find(question => question.question_id === id)
+    if (!q || used.has(q.question_id)) return
+
+    used.add(q.question_id)
+    selectedQuestions.push({
+      ...q,
+      ai_reasoning: reasoning[q.question_id] || ''
+    })
+  })
+
+  poolQuestions.forEach(q => {
+    if (selectedQuestions.length >= 5) return
+    if (used.has(q.question_id)) return
+
+    used.add(q.question_id)
+    selectedQuestions.push({
+      ...q,
+      ai_reasoning: reasoning[q.question_id] || 'Fallback question selected to keep the assessment complete.'
+    })
+  })
+
+  return {
+    success: true,
+    section: {
+      section: brandCategory,
+      label: brandCategory.charAt(0).toUpperCase() + brandCategory.slice(1),
+      questions: selectedQuestions
+    },
+    reasoning,
+    ai_usage: aiUsage
+  }
+}
+
 // ── GET ALL FIXED QUESTIONS (personal + lifestyle) ──
+// Returns fixed personal and lifestyle questions in the order they should appear in the widget.
 const getFixedQuestions = async (req, res) => {
   try {
     const { data, error } = await supabase
@@ -35,6 +102,7 @@ const getFixedQuestions = async (req, res) => {
 }
 
 // ── AI SELECT DYNAMIC QUESTIONS ──
+// Uses Gemini to choose the five most relevant category-specific questions for this user's profile.
 const selectDynamicQuestions = async (req, res) => {
   const { personal_answers, lifestyle_answers, brand_category } = req.body
   let poolQuestions = []
@@ -77,6 +145,7 @@ BRAND CATEGORY: ${brand_category}
 
 Below are ${poolQuestions.length} possible questions from our ${brand_category} question bank.
 Each question has a question_id and field_key.
+You must choose question_id values exactly as written in this pool.
 
 QUESTION POOL:
 ${poolQuestions.map((q, i) => `
@@ -111,40 +180,33 @@ Respond ONLY in this exact JSON format with no extra text:
 `
 
     // Step 3 — call Gemini
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' })
+    const model = genAI.getGenerativeModel({
+      model: 'gemini-2.5-flash',
+      generationConfig: {
+        responseMimeType: 'application/json',
+        temperature: 0.2,
+        maxOutputTokens: 1200
+      }
+    })
     const result = await model.generateContent(prompt)
     const aiUsage = formatGeminiUsage(result.response.usageMetadata)
     const responseText = result.response.text()
-    const cleaned = responseText.replace(/```json|```/g, '').trim()
-    const aiResponse = JSON.parse(cleaned)
+    const aiResponse = parseJsonResponse(responseText)
 
     console.log('Gemini token usage - question selection:', aiUsage)
 
     // Step 4 — fetch the selected questions in order
-    const selectedIds = aiResponse.selected_question_ids
-    const selectedQuestions = selectedIds
-      .map(id => {
-        const q = poolQuestions.find(q => q.question_id === id)
-        if (q) {
-          return {
-            ...q,
-            ai_reasoning: aiResponse.reasoning[id] || ''
-          }
-        }
-        return null
-      })
-      .filter(Boolean)
+    const selectedIds = Array.isArray(aiResponse.selected_question_ids)
+      ? aiResponse.selected_question_ids
+      : []
 
-    res.json({
-      success: true,
-      section: {
-        section: brand_category,
-        label: brand_category.charAt(0).toUpperCase() + brand_category.slice(1),
-        questions: selectedQuestions
-      },
-      reasoning: aiResponse.reasoning,
-      ai_usage: aiUsage
-    })
+    return res.json(buildQuestionResponse(
+      brand_category,
+      poolQuestions,
+      selectedIds,
+      aiResponse.reasoning || {},
+      aiUsage
+    ))
 
   } catch (error) {
     console.error('Question selection error:', error)
@@ -156,22 +218,13 @@ Respond ONLY in this exact JSON format with no extra text:
       })
     }
 
-    const fallbackQuestions = poolQuestions.slice(0, 5)
-    return res.json({
-      success: true,
-      section: {
-        section: brand_category,
-        label: brand_category.charAt(0).toUpperCase() + brand_category.slice(1),
-        questions: fallbackQuestions
-      },
-      reasoning: {},
-      ai_usage: {
-        input_tokens: 0,
-        output_tokens: 0,
-        total_tokens: 0,
-        cached_tokens: 0
-      }
-    })
+    return res.json(buildQuestionResponse(
+      brand_category,
+      poolQuestions,
+      [],
+      {},
+      emptyUsage
+    ))
   }
   
 }

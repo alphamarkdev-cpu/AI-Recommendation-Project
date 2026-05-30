@@ -20,21 +20,26 @@ app.use('/api/recommend', recommendRouter)
 app.use('/api/questions', questionsRouter)
 app.use(express.static(path.join(__dirname)))
 
+// Serves the default skincare widget HTML file to the browser.
 app.get('/widget', (req, res) => {
   res.sendFile(path.join(__dirname, 'alphamark-widget-v3.html'))
 })
+// Serves the haircare widget variant to the browser.
 app.get('/widget-hair', (req, res) => {
   res.sendFile(path.join(__dirname, 'alphamark-widget-hair.html'))
 })
+// Serves the supplements widget variant to the browser.
 app.get('/widget-supplements', (req, res) => {
   res.sendFile(path.join(__dirname, 'alphamark-widget-supplements.html'))
 })
 
+// Simple health check route used to confirm that the API server is running.
 app.get('/', (req, res) => {
   res.json({ message: 'AlphaMark AI Recommendation API is running' })
 })
 
 // temporary test route - no API key needed
+// Returns all products directly from Supabase for quick local debugging.
 app.get('/test-products', async (req, res) => {
   const { data, error } = await supabase
     .from('products')
@@ -44,6 +49,7 @@ app.get('/test-products', async (req, res) => {
 })
 
 // temporary test route - no API key needed
+// Returns all brands directly from Supabase for quick local debugging.
 app.get('/test-brands', async (req, res) => {
   const { data, error } = await supabase
     .from('brands')
@@ -51,18 +57,21 @@ app.get('/test-brands', async (req, res) => {
   if (error) return res.json({ error: error.message })
   res.json({ brands: data })
 })
+// Shows partial Supabase environment values so local setup can be checked safely.
 app.get('/debug-env', (req, res) => {
   res.json({
     supabase_url: process.env.SUPABASE_URL,
     supabase_key_first10: process.env.SUPABASE_KEY?.substring(0, 10)
   })
 })
+// Shows a partial Gemini key so API key loading can be checked without exposing it fully.
 app.get('/debug-gemini', (req, res) => {
   res.json({
     gemini_key_first15: process.env.GEMINI_API_KEY?.substring(0, 15)
   })
 })
 
+// Returns fixed personal and lifestyle questions for debugging the question bank.
 app.get('/test-fixed-questions', async (req, res) => {
   const supabase = require('./config/supabase')
   const { data, error } = await supabase
@@ -77,6 +86,7 @@ app.get('/test-fixed-questions', async (req, res) => {
 })
 
 const PORT = process.env.PORT || 3000
+// Starts the Express server on the configured port.
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`)
 })

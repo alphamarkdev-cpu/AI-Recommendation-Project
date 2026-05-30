@@ -6,6 +6,7 @@ require('dotenv').config()
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY)
 
+// Converts a browser data URL image into Gemini's inlineData shape.
 const parseDataUrlImage = dataUrl => {
   if (!dataUrl || typeof dataUrl !== 'string') return null
 
@@ -18,6 +19,7 @@ const parseDataUrlImage = dataUrl => {
   }
 }
 
+// Creates a personalized recommendation by matching products, prompting Gemini, and saving the session.
 const getRecommendation = async (req, res) => {
   try {
     const {
@@ -40,7 +42,7 @@ const getRecommendation = async (req, res) => {
     const concernsList = Array.isArray(concerns)  ? concerns  : [concerns]
     const photoImage = parseDataUrlImage(photo_image)
 
-    // â”€â”€ Step 1: Fetch matching products â”€â”€
+    // . Step 1: Fetch matching products .
     const matchingProducts = await getMatchingProducts(brandId, skinTypes, concernsList)
 
     if (!matchingProducts || matchingProducts.length === 0) {
@@ -49,7 +51,7 @@ const getRecommendation = async (req, res) => {
       })
     }
 
-    // â”€â”€ Step 2: Build product context for AI â”€â”€
+    // . Step 2: Build product context for AI .
     const productsContext = matchingProducts.map(p => ({
       name:                p.name,
       category:            p.category,
@@ -63,7 +65,7 @@ const getRecommendation = async (req, res) => {
       key_ingredients:     p.ingredients.map(i => i.name)
     }))
 
-    // â”€â”€ Step 3: Build product image + URL maps to send back to frontend â”€â”€
+    // . Step 3: Build product image + URL maps to send back to frontend .
     const productImages = {}
     const productUrls   = {}
     matchingProducts.forEach(p => {
@@ -71,7 +73,7 @@ const getRecommendation = async (req, res) => {
       productUrls[p.name]   = p.product_url || null
     })
 
-    // â”€â”€ Step 4: Clean AI prompt â”€â”€
+    // Step 4: Clean AI prompt .
     const prompt = `
 You are an expert skincare and wellness advisor for ${brandName}.
 
@@ -152,7 +154,7 @@ Respond ONLY in this exact JSON â€” no markdown, no extra text:
 }
 `
 
-    // â”€â”€ Step 5: Call Gemini â”€â”€
+    // Step 5: Call Gemini
     const model  = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' })
     const request = photoImage
       ? [
@@ -173,7 +175,7 @@ Respond ONLY in this exact JSON â€” no markdown, no extra text:
 
     console.log('Gemini token usage - recommendation:', aiUsage)
     
-    // â”€â”€ Step 6: Save session â”€â”€
+    // . Step 6: Save session .
     const { error: sessionError } = await supabase
       .from('consumer_sessions')
       .insert({
@@ -193,7 +195,7 @@ Respond ONLY in this exact JSON â€” no markdown, no extra text:
 
     if (sessionError) console.error('Session save error:', sessionError)
 
-    // â”€â”€ Step 7: Return result with product images and URLs â”€â”€
+    // . Step 7: Return result with product images and URLs .
     res.json({
       success: true,
       recommendation,

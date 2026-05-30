@@ -32,6 +32,7 @@
     const API_URL = 'http://localhost:3000'
     const API_KEY = 'test-api-key-001'
 
+    // Calls the authenticated brand endpoint and prints the response.
     async function testBrands() {
       document.getElementById('status').innerText = 'Loading...'
       const res = await fetch(`${API_URL}/api/brands/me`, {
@@ -42,6 +43,7 @@
       document.getElementById('result').innerText = JSON.stringify(data, null, 2)
     }
 
+    // Calls the product endpoint and prints all active products for the test brand.
     async function testProducts() {
       document.getElementById('status').innerText = 'Loading...'
       const res = await fetch(`${API_URL}/api/products`, {
@@ -52,6 +54,7 @@
       document.getElementById('result').innerText = JSON.stringify(data, null, 2)
     }
 
+    // Sends a sample skincare profile to the recommendation API.
     async function testRecommendation() {
       document.getElementById('status').innerText = 'Calling Gemini AI... please wait 10-15 seconds...'
       document.getElementById('result').innerText = 'Generating recommendation...'
@@ -78,6 +81,7 @@
       document.getElementById('result').innerText = JSON.stringify(data, null, 2)
     }
 
+    // Loads fixed questions from the debug route and displays the raw response.
     async function testFixedQuestions() {
       document.getElementById('status').innerText = 'Loading fixed questions...'
       const res = await fetch(`${API_URL}/test-fixed-questions`)
@@ -86,6 +90,7 @@
       document.getElementById('result').innerText = JSON.stringify(data, null, 2)
     }
 
+    // Sends sample profile answers so the AI dynamic-question selector can be tested.
     async function testQuestionSelect() {
       document.getElementById('status').innerText = 'AI selecting questions... please wait...'
       document.getElementById('result').innerText = 'Gemini is analysing the consumer profile and selecting questions...'
@@ -242,6 +247,7 @@ button{
 
 let allQuestions = [];
 
+// Loads fixed questions into the standalone test page.
 async function loadQuestions(){
 
   try{
@@ -278,6 +284,7 @@ async function loadQuestions(){
   }
 }
 
+// Renders text inputs for each test question returned by the backend.
 function renderQuestions(questions){
 
   const container =
@@ -310,6 +317,7 @@ function renderQuestions(questions){
   });
 }
 
+// Sends collected test answers to the recommendation API and renders the result.
 async function generateRecommendation(){
 
   document.querySelector(

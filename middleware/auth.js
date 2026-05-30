@@ -1,5 +1,6 @@
 const supabase = require('../config/supabase')
 
+// Validates the x-api-key header and attaches the matching active brand to the request.
 const authenticateBrand = async (req, res, next) => {
   const apiKey = req.headers['x-api-key']
 

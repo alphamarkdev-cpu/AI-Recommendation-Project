@@ -1,5 +1,6 @@
 const supabase = require('../config/supabase')
 
+// Returns all active products for the authenticated brand, including ingredients and concern tags.
 const getProducts = async (req, res) => {
   try {
     const { data, error } = await supabase
@@ -20,6 +21,7 @@ const getProducts = async (req, res) => {
   }
 }
 
+// Finds and ranks active brand products that best match the user's selected types and concerns.
 const getMatchingProducts = async (brandId, skinTypes, concerns) => {
   try {
     // fetch ALL active products for this brand
