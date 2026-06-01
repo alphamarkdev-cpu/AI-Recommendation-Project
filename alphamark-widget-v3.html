@@ -534,6 +534,10 @@ if(EMBED_MODE) document.body.classList.add('embed-mode')
 
 // . STATE .
 let allQ    = []   // all questions loaded from DB
+let useStoredFlow = false
+let flowDefinition = null
+let flowNodes = {}
+let questionHistory = []
 let cur     = 0
 let answers = {}
 let photoB64= null
@@ -566,13 +570,48 @@ function closeWidget(){
 }
 
 // . LOAD QUESTIONS FROM BACKEND .
-// Loads fixed questions for the current brand and prepares the first screen.
+// Loads the stored brand question flow first, then falls back to the legacy fixed-question path.
 async function loadQuestions(){
   showScreen('q')
   document.getElementById('q-wrap').innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:100%;flex-direction:column;gap:12px;color:var(--text3);font-size:13px;"><div class="load-ring" style="width:36px;height:36px;border-width:2px;"></div>Loading your questionnaire...</div>`
 
   try {
-    // Fetch fixed questions (personal + lifestyle)
+    // Fetch the pre-generated flow so the session does not need an AI question-selection call.
+    const flowRes = await fetch(`${API}/api/questions/flow?category=${encodeURIComponent(BCAT)}`, {
+      headers: { 'x-api-key': AKEY }
+    })
+    const flowData = await flowRes.json()
+
+    if(flowData.success && flowData.flow){
+      const questions = normaliseQuestionsJson(flowData.flow.questions_json)
+      const flow = normaliseFlowJson(flowData.flow.flow_json)
+
+      if(questions.length){
+        useStoredFlow = true
+        flowDefinition = flow
+        flowNodes = flow.nodes || {}
+        questionHistory = []
+        allQ = questions
+
+        const startId = flow.start || questionId(allQ[0])
+        cur = Math.max(findQuestionIndexById(startId), 0)
+        buildSlides()
+        updateUI()
+        return
+      }
+    }
+
+    console.warn('No active stored question flow found. Falling back to legacy question loading.')
+    await loadLegacyQuestions()
+  } catch(e){
+    console.warn('Stored flow load failed. Falling back to legacy question loading.', e)
+    await loadLegacyQuestions()
+  }
+}
+
+// Loads the old fixed-question path for brands that do not have a stored flow yet.
+async function loadLegacyQuestions(){
+  try {
     const res = await fetch(`${API}/api/questions/fixed`, {
       headers: { 'x-api-key': AKEY }
     })
@@ -580,6 +619,11 @@ async function loadQuestions(){
 
     if(data.success){
       // flatten sections into one array
+      useStoredFlow = false
+      flowDefinition = null
+      flowNodes = {}
+      questionHistory = []
+      allQ = []
       data.sections.forEach(sec => {
         sec.questions.forEach(q => allQ.push({...q, section_label: sec.label}))
       })
@@ -593,6 +637,74 @@ async function loadQuestions(){
   }
 }
 
+// Parses JSON columns that may arrive from Supabase as objects or serialized strings.
+function parseJsonMaybe(value, fallback){
+  if(!value) return fallback
+  if(typeof value !== 'string') return value
+  try { return JSON.parse(value) } catch(e) { return fallback }
+}
+
+// Converts a stored-flow question into the same shape the existing widget renderer expects.
+function normaliseStoredQuestion(q, idx){
+  const id = q.question_id || q.id || q.flow_id || `q${idx + 1}`
+  const options = q.options_json ?? q.options ?? []
+
+  return {
+    ...q,
+    question_id: id,
+    field_key: q.field_key || id,
+    question_text: q.question_text || q.text || q.question || '',
+    sub_text: q.sub_text || q.description || '',
+    input_type: q.input_type || q.type || 'chips',
+    options_json: options,
+    category: q.category || BCAT,
+    section_label: q.section_label || q.section || 'Assessment'
+  }
+}
+
+// Extracts the question array from the active flow row.
+function normaliseQuestionsJson(value){
+  const parsed = parseJsonMaybe(value, [])
+  const questions = Array.isArray(parsed) ? parsed : parsed.questions || []
+  return questions.map(normaliseStoredQuestion)
+}
+
+// Extracts the flow definition from the active flow row.
+function normaliseFlowJson(value){
+  const parsed = parseJsonMaybe(value, {})
+  if(Array.isArray(parsed)){
+    return { start: null, nodes: {} }
+  }
+  return {
+    start: parsed.start || parsed.start_question_id || null,
+    nodes: parsed.nodes || parsed.flow || {}
+  }
+}
+
+// Returns the stable ID used by the stored decision tree.
+function questionId(q){
+  return q?.question_id || q?.id || q?.flow_id || q?.field_key
+}
+
+// Finds a question's index by any of its supported ID fields.
+function findQuestionIndexById(id){
+  return allQ.findIndex(q => questionId(q) === id || q.field_key === id)
+}
+
+// Normalizes option data from arrays, JSON strings, or objects with an options/items list.
+function optionList(value){
+  const parsed = parseJsonMaybe(value, [])
+  if(Array.isArray(parsed)) return parsed
+  if(Array.isArray(parsed.options)) return parsed.options
+  if(Array.isArray(parsed.items)) return parsed.items
+  return []
+}
+
+// Reads a display label from string or object options.
+function optionLabel(option){
+  return typeof option === 'object' ? option.label || option.value || option.text || '' : option
+}
+
 // . BUILD SLIDES .
 // Renders one slide for each loaded question into the quiz wrapper.
 function buildSlides(){
@@ -600,7 +712,7 @@ function buildSlides(){
   wrap.innerHTML = ''
   allQ.forEach((q,i) => {
     const div = document.createElement('div')
-    div.className = 'q-slide' + (i===0?' active':' right')
+    div.className = 'q-slide' + (i===cur?' active':' right')
     div.id = 'qs'+i
     div.innerHTML = slideHTML(q,i)
     wrap.appendChild(div)
@@ -616,12 +728,20 @@ function slideHTML(q,i){
     opts = `<input class="txt-inp" id="fi-${q.field_key}" placeholder="${q.options_json?.placeholder||'Type your answer...'}" value="${saved||''}" oninput="answers['${q.field_key}']=this.value">`
   }
   else if(q.input_type==='chips'){
-    const chips = JSON.parse(typeof q.options_json==='string'?q.options_json:JSON.stringify(q.options_json)||'[]')
-    opts = `<div class="chips">${chips.map(c=>`<button class="chip${saved===c?' sel':''}" onclick="pick('${q.field_key}','${c}',this,'chip')">${c}</button>`).join('')}</div>`
+    const chips = optionList(q.options_json)
+    opts = `<div class="chips">${chips.map(c=>{
+      const label = optionLabel(c)
+      return `<button class="chip${saved===label?' sel':''}" onclick="pick('${q.field_key}','${label}',this,'chip')">${label}</button>`
+    }).join('')}</div>`
   }
   else if(q.input_type==='cards'){
-    const cards = JSON.parse(typeof q.options_json==='string'?q.options_json:JSON.stringify(q.options_json)||'[]')
-    opts = `<div class="cards2">${cards.map(c=>`<div class="card-opt${saved===c.label?' sel':''}" onclick="pick('${q.field_key}','${c.label}',this,'card')"><span class="card-emoji">${c.emoji}</span><div class="card-label">${c.label}</div><div class="card-sub">${c.sub}</div></div>`).join('')}</div>`
+    const cards = optionList(q.options_json)
+    opts = `<div class="cards2">${cards.map(c=>{
+      const label = optionLabel(c)
+      const emoji = typeof c === 'object' ? c.emoji || '' : ''
+      const sub = typeof c === 'object' ? c.sub || c.description || '' : ''
+      return `<div class="card-opt${saved===label?' sel':''}" onclick="pick('${q.field_key}','${label}',this,'card')"><span class="card-emoji">${emoji}</span><div class="card-label">${label}</div><div class="card-sub">${sub}</div></div>`
+    }).join('')}</div>`
   }
   else if(q.input_type==='scale'){
     const lbls = ['Very low','','Moderate','','Very high']
@@ -660,10 +780,59 @@ function pick(key,val,el,type){
   el.classList.add('sel')
 }
 
+// Returns the answer value used to choose the next node in the stored flow tree.
+function flowAnswerValue(q){
+  const value = answers[q.field_key]
+  if(value && typeof value === 'object') return value.v1 || value.label || JSON.stringify(value)
+  return String(value || '')
+}
+
+// Finds the next sequential question when a flow node does not define a branch.
+function nextLinearQuestionId(){
+  const nextQuestion = allQ[cur + 1]
+  return nextQuestion ? questionId(nextQuestion) : null
+}
+
+// Resolves the next question ID from the stored tree using the user's current answer.
+function resolveNextQuestionId(){
+  const q = allQ[cur]
+  const id = questionId(q)
+  const node = flowNodes[id] || flowNodes[q.field_key] || {}
+  const value = flowAnswerValue(q)
+
+  if(typeof node === 'string') return node
+  if(node.if && node.if[value]) return node.if[value]
+  if(node.branches && node.branches[value]) return node.branches[value]
+  if(node.answers && node.answers[value]) return node.answers[value]
+  if(node.default) return node.default
+  if(node.next) return node.next
+
+  return nextLinearQuestionId()
+}
+
 // . NAVIGATION .
 // Moves forward through the quiz and triggers dynamic questions after fixed answers.
 function next(){
   saveText()
+
+  if(useStoredFlow){
+    const nextId = resolveNextQuestionId()
+    if(!nextId || nextId === 'END' || nextId === 'end'){
+      moveToPhoto()
+      return
+    }
+
+    const nextIndex = findQuestionIndexById(nextId)
+    if(nextIndex === -1){
+      console.warn('Flow pointed to missing question:', nextId)
+      moveToPhoto()
+      return
+    }
+
+    questionHistory.push(cur)
+    go(nextIndex, nextIndex > cur ? 'right' : 'left')
+    return
+  }
 
   // check if dynamic questions already loaded
   const hasDynamic = allQ.some(q => 
@@ -690,6 +859,11 @@ function next(){
 
 // Moves backward through the quiz or returns from the photo screen to the last question.
 function prev(){
+  if(useStoredFlow && questionHistory.length){
+    const previousIndex = questionHistory.pop()
+    go(previousIndex,'left')
+    return
+  }
   if(cur>0) go(cur-1,'left')
 }
 
@@ -723,12 +897,17 @@ function updateUI(){
   if(!q) return
 
   const total = allQ.length
-  const pct   = Math.round((cur / total) * 90)
+  const pct   = useStoredFlow
+    ? Math.min(90, Math.round(((questionHistory.length + 1) / Math.max(total, 1)) * 90))
+    : Math.round((cur / total) * 90)
 
   document.getElementById('prog').style.width  = pct + '%'
   document.getElementById('qcount').innerText  = `${cur + 1} of ${total}`
-  document.getElementById('btn-prev').disabled = cur === 0
+  document.getElementById('btn-prev').disabled = useStoredFlow ? questionHistory.length === 0 : cur === 0
 
+  if(useStoredFlow){
+    document.getElementById('btn-next').innerText = nextLinearQuestionId() ? 'Next' : 'Finish'
+  } else {
   // btn-next label
   const hasDynamic = allQ.some(q => ['skincare','haircare','supplements'].includes(q.category))
   const fixedCount = allQ.filter(q => ['personal','lifestyle'].includes(q.category)).length
@@ -741,6 +920,7 @@ function updateUI(){
     document.getElementById('btn-next').innerText = 'Continue'
   } else {
     document.getElementById('btn-next').innerText = 'Next'
+  }
   }
 
   // section tabs
@@ -1196,6 +1376,7 @@ function showFallback(){
 // Resets local widget state so the user can start the assessment again.
 function restart(){
   allQ=[]; cur=0; answers={}; photoB64=null
+  useStoredFlow=false; flowDefinition=null; flowNodes={}; questionHistory=[]
   document.getElementById('photo-prev').style.display='none'
   document.getElementById('analyze-btn').style.display='none'
   document.getElementById('prog').style.width='0%'

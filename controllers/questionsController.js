@@ -73,6 +73,199 @@ const buildQuestionResponse = (brandCategory, poolQuestions, selectedIds = [], r
 
 // ── GET ALL FIXED QUESTIONS (personal + lifestyle) ──
 // Returns fixed personal and lifestyle questions in the order they should appear in the widget.
+// Returns the active pre-generated question flow for the authenticated brand and category.
+const getActiveQuestionFlow = async (req, res) => {
+  try {
+    const category = req.query.category || req.query.brand_category
+
+    if (!category) {
+      return res.status(400).json({ error: 'category is required' })
+    }
+
+    const { data, error } = await supabase
+      .from('brand_question_flows')
+      .select('flow_id, brand_id, category, version, questions_json, flow_json, is_active, updated_at')
+      .eq('brand_id', req.brand.brand_id)
+      .eq('category', category)
+      .eq('is_active', true)
+      .order('version', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+
+    if (error) throw error
+
+    if (!data) {
+      return res.status(404).json({
+        success: false,
+        error: `No active question flow found for category: ${category}`
+      })
+    }
+
+    res.json({
+      success: true,
+      flow: data
+    })
+  } catch (error) {
+    console.error('Question flow error:', error)
+    res.status(500).json({ error: error.message })
+  }
+}
+
+// Generates and stores a new brand question flow from the brand's current product catalogue.
+const generateQuestionFlow = async (req, res) => {
+  try {
+    const category = req.body.category || req.body.brand_category || req.brand.product_category || 'skincare'
+    const brandId = req.brand.brand_id
+
+    const { data: products, error: productsError } = await supabase
+      .from('products')
+      .select(`
+        name,
+        category,
+        description,
+        suitable_skin_types,
+        ingredients(name),
+        concern_tags(concern, severity_level, priority_score)
+      `)
+      .eq('brand_id', brandId)
+      .eq('is_active', true)
+
+    if (productsError) throw productsError
+    if (!products || products.length === 0) {
+      return res.status(404).json({ error: 'No active products found for this brand.' })
+    }
+
+    const productContext = products.map(product => ({
+      name: product.name,
+      category: product.category,
+      description: product.description,
+      suitable_skin_types: product.suitable_skin_types,
+      ingredients: product.ingredients.map(ingredient => ingredient.name),
+      concerns: product.concern_tags.map(tag => ({
+        concern: tag.concern,
+        severity_level: tag.severity_level,
+        priority_score: tag.priority_score
+      }))
+    }))
+
+    const prompt = `
+You are building a stored decision-tree questionnaire for ${req.brand.name}.
+
+BRAND CATEGORY: ${category}
+
+PRODUCTS AND CONCERNS:
+${JSON.stringify(productContext, null, 2)}
+
+Create a reusable question flow that can run without calling AI during the user's quiz session.
+
+Rules:
+- Generate exactly 20 questions.
+- Questions must identify the user's main concern, type, severity, triggers, history, budget, allergies, and routine habits.
+- Use only these input_type values: "chips", "cards", "scale", "text".
+- Use concise consumer-friendly wording.
+- Every question must have a stable question_id like "q1", "q2", etc.
+- Every field_key must be lowercase snake_case.
+- flow_json must be a decision tree.
+- The tree must start with "q1".
+- Branch using answer text exactly as it appears in options_json.
+- Use "END" when the quiz should go to photo/recommendation.
+
+Respond ONLY in this exact JSON shape:
+{
+  "questions_json": [
+    {
+      "question_id": "q1",
+      "field_key": "primary_concern",
+      "question_text": "What is your main concern right now?",
+      "sub_text": "Choose the closest match.",
+      "input_type": "chips",
+      "options_json": ["Acne", "Oily skin", "Dryness"],
+      "category": "${category}",
+      "section_label": "Assessment"
+    }
+  ],
+  "flow_json": {
+    "start": "q1",
+    "nodes": {
+      "q1": {
+        "if": {
+          "Acne": "q2",
+          "Oily skin": "q3"
+        },
+        "default": "q4"
+      },
+      "q20": {
+        "next": "END"
+      }
+    }
+  }
+}
+`
+
+    const model = genAI.getGenerativeModel({
+      model: 'gemini-2.5-flash',
+      generationConfig: {
+        responseMimeType: 'application/json',
+        temperature: 0.2,
+        maxOutputTokens: 7000
+      }
+    })
+    const result = await model.generateContent(prompt)
+    const aiUsage = formatGeminiUsage(result.response.usageMetadata)
+    const flow = parseJsonResponse(result.response.text())
+
+    if (!Array.isArray(flow.questions_json) || !flow.flow_json) {
+      return res.status(500).json({ error: 'AI did not return a valid question flow.' })
+    }
+
+    const { data: latestFlow, error: latestError } = await supabase
+      .from('brand_question_flows')
+      .select('version')
+      .eq('brand_id', brandId)
+      .eq('category', category)
+      .order('version', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+
+    if (latestError) throw latestError
+
+    const nextVersion = (latestFlow?.version || 0) + 1
+
+    const { error: deactivateError } = await supabase
+      .from('brand_question_flows')
+      .update({ is_active: false })
+      .eq('brand_id', brandId)
+      .eq('category', category)
+      .eq('is_active', true)
+
+    if (deactivateError) throw deactivateError
+
+    const { data: savedFlow, error: saveError } = await supabase
+      .from('brand_question_flows')
+      .insert({
+        brand_id: brandId,
+        category,
+        version: nextVersion,
+        questions_json: flow.questions_json,
+        flow_json: flow.flow_json,
+        is_active: true
+      })
+      .select('flow_id, brand_id, category, version, is_active, updated_at')
+      .single()
+
+    if (saveError) throw saveError
+
+    res.json({
+      success: true,
+      flow: savedFlow,
+      ai_usage: aiUsage
+    })
+  } catch (error) {
+    console.error('Generate question flow error:', error)
+    res.status(500).json({ error: error.message })
+  }
+}
+
 const getFixedQuestions = async (req, res) => {
   try {
     const { data, error } = await supabase
@@ -229,6 +422,6 @@ Respond ONLY in this exact JSON format with no extra text:
   
 }
 
-module.exports = { getFixedQuestions, selectDynamicQuestions }
+module.exports = { getFixedQuestions, getActiveQuestionFlow, generateQuestionFlow, selectDynamicQuestions }
 
 
