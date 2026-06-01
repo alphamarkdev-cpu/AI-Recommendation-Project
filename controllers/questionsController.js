@@ -330,7 +330,10 @@ Respond ONLY in this exact JSON shape:
     }
 
     if (!Array.isArray(flow.questions_json) || !flow.flow_json) {
-      return res.status(500).json({ error: 'AI did not return a valid question flow.' })
+      console.error('AI did not return a valid question flow shape. Using deterministic fallback flow.')
+      flow = buildFallbackFlow(category, products)
+      aiUsage = emptyUsage
+      usedFallback = true
     }
 
     const { data: latestFlow, error: latestError } = await supabase
