@@ -179,6 +179,142 @@ const buildFallbackFlow = (category, products) => {
   }
 }
 
+// Keeps only valid generated question fields and gives every question a predictable ID.
+const normaliseGeneratedQuestions = (questions = [], category) => {
+  if (!Array.isArray(questions)) return []
+
+  return questions
+    .slice(0, 10)
+    .map((question, index) => ({
+      question_id: question.question_id || `q${index + 1}`,
+      field_key: question.field_key || `question_${index + 1}`,
+      question_text: question.question_text || question.question || question.text || '',
+      sub_text: question.sub_text || question.description || '',
+      input_type: ['chips', 'cards', 'scale', 'text'].includes(question.input_type)
+        ? question.input_type
+        : 'chips',
+      options_json: question.options_json || question.options || [],
+      category: question.category || category,
+      section_label: question.section_label || 'Assessment'
+    }))
+    .filter(question => question.question_text && question.field_key)
+}
+
+// Creates a simple linear flow for a valid question list.
+const buildLinearFlow = questions => ({
+  start: questions[0]?.question_id || 'q1',
+  nodes: questions.reduce((nodes, question, index) => {
+    const nextQuestion = questions[index + 1]
+    nodes[question.question_id] = nextQuestion
+      ? { default: nextQuestion.question_id }
+      : { next: 'END' }
+    return nodes
+  }, {})
+})
+
+// Converts stored option data into the exact answer strings used by the widget.
+const optionLabels = question => {
+  if (question.input_type === 'scale') return ['1', '2', '3', '4', '5']
+  if (question.input_type === 'text') return []
+
+  const options = Array.isArray(question.options_json) ? question.options_json : []
+  return options
+    .map(option => {
+      if (option && typeof option === 'object') {
+        return option.label || option.value || option.text || ''
+      }
+      return String(option || '')
+    })
+    .filter(Boolean)
+}
+
+// Gives Gemini a compact routing schema with the valid answer labels for each question.
+const buildFlowPromptQuestions = questions => questions.map((question, index) => ({
+  question_id: question.question_id,
+  order: index + 1,
+  field_key: question.field_key,
+  input_type: question.input_type,
+  question_text: question.question_text,
+  answer_values_for_if: optionLabels(question),
+  next_linear_question_id: questions[index + 1]?.question_id || 'END'
+}))
+
+// Validates Gemini routing against the stored questions and widget-supported node shape.
+const normaliseGeneratedFlow = (flowJson, questions) => {
+  const questionIds = new Set(questions.map(question => question.question_id))
+  const validTargets = new Set([...questionIds, 'END'])
+  const firstQuestionId = questions[0]?.question_id
+
+  if (!flowJson || typeof flowJson !== 'object' || Array.isArray(flowJson)) {
+    throw new Error('Gemini flow_json must be an object.')
+  }
+
+  const nodes = flowJson.nodes
+  if (!nodes || typeof nodes !== 'object' || Array.isArray(nodes)) {
+    throw new Error('Gemini flow_json.nodes must be an object.')
+  }
+
+  const normalised = {
+    start: questionIds.has(flowJson.start) ? flowJson.start : firstQuestionId,
+    nodes: {}
+  }
+
+  questions.forEach((question, index) => {
+    const node = nodes[question.question_id]
+    const nextQuestion = questions[index + 1]
+    const fallbackTarget = nextQuestion?.question_id || 'END'
+
+    if (typeof node === 'string') {
+      normalised.nodes[question.question_id] = validTargets.has(node)
+        ? { next: node }
+        : { default: fallbackTarget }
+      return
+    }
+
+    if (!node || typeof node !== 'object' || Array.isArray(node)) {
+      normalised.nodes[question.question_id] = nextQuestion
+        ? { default: fallbackTarget }
+        : { next: 'END' }
+      return
+    }
+
+    const cleanedNode = {}
+
+    if (node.if && typeof node.if === 'object' && !Array.isArray(node.if)) {
+      const cleanedIf = {}
+      Object.entries(node.if).forEach(([answer, target]) => {
+        if (validTargets.has(target)) cleanedIf[answer] = target
+      })
+      if (Object.keys(cleanedIf).length) cleanedNode.if = cleanedIf
+    }
+
+    if (validTargets.has(node.default)) cleanedNode.default = node.default
+    if (validTargets.has(node.next)) cleanedNode.next = node.next
+
+    if (!cleanedNode.if && !cleanedNode.default && !cleanedNode.next) {
+      if (nextQuestion) cleanedNode.default = fallbackTarget
+      else cleanedNode.next = 'END'
+    }
+
+    normalised.nodes[question.question_id] = cleanedNode
+  })
+
+  if (normalised.start !== firstQuestionId) {
+    throw new Error('Gemini flow_json.start must be the first generated question_id.')
+  }
+
+  return normalised
+}
+
+// Accepts common Gemini shapes and returns the generated questions array.
+const extractQuestionsFromAi = aiResponse => {
+  if (Array.isArray(aiResponse)) return aiResponse
+  return aiResponse.questions_json || aiResponse.questions || aiResponse.question_flow || []
+}
+
+// Accepts common Gemini shapes and returns the generated flow object.
+const extractFlowFromAi = aiResponse => aiResponse.flow_json || aiResponse.flow || aiResponse.decision_tree || null
+
 const getActiveQuestionFlow = async (req, res) => {
   try {
     const category = req.query.category || req.query.brand_category
@@ -253,27 +389,26 @@ const generateQuestionFlow = async (req, res) => {
       }))
     }))
 
-    const prompt = `
-You are building a stored decision-tree questionnaire for ${req.brand.name}.
+    const questionsPrompt = `
+You are building reusable quiz questions for ${req.brand.name}.
 
 BRAND CATEGORY: ${category}
 
 PRODUCTS AND CONCERNS:
 ${JSON.stringify(productContext, null, 2)}
 
-Create a reusable question flow that can run without calling AI during the user's quiz session.
+Create reusable questions that can run without calling AI during the user's quiz session.
 
 Rules:
-- Generate exactly 8 questions.
+- Generate exactly 8 questions only.
 - Questions must identify the user's main concern, type, severity, triggers, history, budget, allergies, and routine habits.
 - Use only these input_type values: "chips", "cards", "scale", "text".
 - Use concise consumer-friendly wording.
 - Every question must have a stable question_id like "q1", "q2", etc.
 - Every field_key must be lowercase snake_case.
-- flow_json must be a simple decision tree.
-- The tree must start with "q1".
-- Branch using answer text exactly as it appears in options_json.
-- Use "END" when the quiz should go to photo/recommendation.
+- For chips/cards, options_json must be an array.
+- For scale, options_json must be [1,2,3,4,5].
+- For text, options_json must be an object with a placeholder.
 
 Respond ONLY in this exact JSON shape:
 {
@@ -288,22 +423,7 @@ Respond ONLY in this exact JSON shape:
       "category": "${category}",
       "section_label": "Assessment"
     }
-  ],
-  "flow_json": {
-    "start": "q1",
-    "nodes": {
-      "q1": {
-        "if": {
-          "Acne": "q2",
-          "Oily skin": "q3"
-        },
-        "default": "q4"
-      },
-      "q8": {
-        "next": "END"
-      }
-    }
-  }
+  ]
 }
 `
 
@@ -320,9 +440,95 @@ Respond ONLY in this exact JSON shape:
     let usedFallback = false
 
     try {
-      const result = await generateWithRetry(model, prompt)
-      aiUsage = formatGeminiUsage(result.response.usageMetadata)
-      flow = await parseJsonResponseWithRepair(model, result.response.text())
+      const questionsResult = await generateWithRetry(model, questionsPrompt)
+      const questionsUsage = formatGeminiUsage(questionsResult.response.usageMetadata)
+      const questionsResponse = await parseJsonResponseWithRepair(model, questionsResult.response.text())
+      const questions = normaliseGeneratedQuestions(extractQuestionsFromAi(questionsResponse), category)
+
+      if (!questions.length) {
+        throw new Error('Gemini did not return usable questions.')
+      }
+
+      const flowPrompt = `
+You are creating the stored routing JSON for the AlphaMark quiz widget.
+
+DATABASE COLUMN:
+- The result will be saved directly into brand_question_flows.flow_json as JSONB.
+
+WIDGET ROUTING CONTRACT:
+- flow_json must be an object with exactly this shape:
+  {
+    "start": "q1",
+    "nodes": {
+      "q1": { "if": { "Answer label": "q2" }, "default": "q2" },
+      "q8": { "next": "END" }
+    }
+  }
+- "start" must equal the first question_id: "${questions[0].question_id}".
+- "nodes" must contain one key for every question_id.
+- Each node may contain only "if", "default", and/or "next".
+- "if" must be an object whose keys are answer values and whose values are question_id targets or "END".
+- "default" must be one question_id target or "END".
+- "next" must be one question_id target or "END".
+- Every target must be one of the provided question_id values or "END".
+- Do not use arrays, explanations, labels, conditions, operators, field_key values, or nested objects as targets.
+
+ANSWER VALUE RULES:
+- For chips and cards, use only the exact strings from answer_values_for_if.
+- For scale, use only the strings "1", "2", "3", "4", "5".
+- For text questions, do not create "if" branches because free text cannot be matched reliably. Use "default" or "next".
+
+FLOW RULES:
+- Keep the quiz short and safe: no loops, no backwards jumps, and never route a question back to itself.
+- It is okay for most nodes to be linear using "default".
+- Add "if" branches only when a user answer should skip an irrelevant question or jump to a more relevant next question.
+- The final reachable node must route to "END".
+- Every question must still appear as a node, even if some branches skip it.
+- Prefer default routing to the next_linear_question_id shown below.
+
+QUESTIONS AVAILABLE FOR ROUTING:
+${JSON.stringify(buildFlowPromptQuestions(questions), null, 2)}
+
+Return ONLY valid JSON. Do not include markdown.
+
+Respond in this exact top-level shape:
+{
+  "flow_json": {
+    "start": "${questions[0].question_id}",
+    "nodes": {
+      "${questions[0].question_id}": {
+        "default": "${questions[1]?.question_id || 'END'}"
+      }
+    }
+  }
+}
+`
+
+      let flowJson = null
+
+      try {
+        const flowResult = await generateWithRetry(model, flowPrompt)
+        const flowUsage = formatGeminiUsage(flowResult.response.usageMetadata)
+        const flowResponse = await parseJsonResponseWithRepair(model, flowResult.response.text())
+        flowJson = normaliseGeneratedFlow(extractFlowFromAi(flowResponse), questions)
+        aiUsage = {
+          input_tokens: questionsUsage.input_tokens + flowUsage.input_tokens,
+          output_tokens: questionsUsage.output_tokens + flowUsage.output_tokens,
+          thinking_tokens: questionsUsage.thinking_tokens + flowUsage.thinking_tokens,
+          other_tokens: questionsUsage.other_tokens + flowUsage.other_tokens,
+          total_tokens: questionsUsage.total_tokens + flowUsage.total_tokens,
+          cached_tokens: questionsUsage.cached_tokens + flowUsage.cached_tokens
+        }
+      } catch (flowError) {
+        console.error('Gemini flow routing failed. Using linear flow for Gemini questions:', flowError.message)
+        flowJson = buildLinearFlow(questions)
+        aiUsage = questionsUsage
+      }
+
+      flow = {
+        questions_json: questions,
+        flow_json: flowJson || buildLinearFlow(questions)
+      }
     } catch (error) {
       console.error('Gemini flow generation failed. Using deterministic fallback flow:', error.message)
       flow = buildFallbackFlow(category, products)
