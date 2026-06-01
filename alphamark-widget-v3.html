@@ -1106,6 +1106,7 @@ async function analyse(){
       logSessionTokenUsage()
       showResult(data.recommendation, data.product_images || {}, data.product_urls || {}, tokenUsage)
     }
+    else if(data.photo_verification?.blocked) showPhotoMismatchError(data.error)
     else showError(data.error)
   } catch(e){
     showError('Could not connect to server. Make sure your backend is running on localhost:3000')
@@ -1382,6 +1383,58 @@ function showError(msg){
       </div>
     </div>
   `
+}
+
+// Lets the user recover from an irrelevant uploaded photo without losing answers.
+function showPhotoMismatchError(msg){
+  showScreen('result')
+  document.getElementById('result-body').innerHTML=`
+    <div style="padding:60px 28px;text-align:center;">
+      <div style="font-size:40px;margin-bottom:16px;">!</div>
+      <div style="font-family:'Instrument Serif',serif;font-size:20px;color:var(--text);margin-bottom:8px;">Photo does not match</div>
+      <div style="font-size:13px;color:var(--text3);line-height:1.7;max-width:760px;margin:0 auto;">${msg}</div>
+      <div class="error-actions">
+        <button class="retry-btn" onclick="retryWithNewPhoto()">Analyze Again With Image</button>
+        <button class="retry-btn" style="background:#fff;color:var(--brand);border:1.5px solid var(--brand);" onclick="retryWithoutPhoto()">Analyze Again Without Image</button>
+      </div>
+    </div>
+  `
+}
+
+// Returns to the upload screen and clears the mismatched image.
+function retryWithNewPhoto(){
+  photoB64 = null
+  const input = document.getElementById('photo-input')
+  const img = document.getElementById('photo-prev')
+  const analyzeBtn = document.getElementById('analyze-btn')
+
+  if(input) input.value = ''
+  if(img){
+    img.removeAttribute('src')
+    img.style.display = 'none'
+  }
+  if(analyzeBtn) analyzeBtn.style.display = 'none'
+
+  document.getElementById('prog').style.width='94%'
+  document.getElementById('st3').className='sec-tab active'
+  showScreen('photo')
+}
+
+// Clears the image and immediately runs recommendation from text answers only.
+function retryWithoutPhoto(){
+  photoB64 = null
+  const input = document.getElementById('photo-input')
+  const img = document.getElementById('photo-prev')
+  const analyzeBtn = document.getElementById('analyze-btn')
+
+  if(input) input.value = ''
+  if(img){
+    img.removeAttribute('src')
+    img.style.display = 'none'
+  }
+  if(analyzeBtn) analyzeBtn.style.display = 'none'
+
+  analyse()
 }
 
 // Activates one top-level widget screen and hides the others.
