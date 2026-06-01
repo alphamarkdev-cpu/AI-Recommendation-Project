@@ -5,6 +5,30 @@ require('dotenv').config()
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY)
 
+// Runs Gemini generation with retries because onboarding flow generation is a one-time admin action.
+const generateWithRetry = async (model, prompt, attempts = 3) => {
+  let lastError
+
+  for (let attempt = 1; attempt <= attempts; attempt++) {
+    try {
+      return await model.generateContent(prompt)
+    } catch (error) {
+      lastError = error
+      console.error(`Gemini generation attempt ${attempt} failed:`, {
+        message: error.message,
+        status: error.status,
+        statusText: error.statusText
+      })
+
+      if (attempt < attempts) {
+        await new Promise(resolve => setTimeout(resolve, attempt * 1500))
+      }
+    }
+  }
+
+  throw lastError
+}
+
 const emptyUsage = {
   input_tokens: 0,
   output_tokens: 0,
@@ -210,7 +234,7 @@ Respond ONLY in this exact JSON shape:
         maxOutputTokens: 7000
       }
     })
-    const result = await model.generateContent(prompt)
+    const result = await generateWithRetry(model, prompt)
     const aiUsage = formatGeminiUsage(result.response.usageMetadata)
     const flow = parseJsonResponse(result.response.text())
 
