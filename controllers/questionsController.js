@@ -482,6 +482,7 @@ The example above shows the object shape only. Your real response must include $
     let aiUsage = emptyUsage
     let flow
     let usedFallback = false
+    let fallbackReason = null
 
     try {
       const questionsResult = await generateWithRetry(model, questionsPrompt)
@@ -589,6 +590,7 @@ The example above shows the object shape only. Your real response must include e
       console.error('Gemini flow generation failed. Using deterministic fallback flow:', error.message)
       flow = buildFallbackFlow(category, products)
       usedFallback = true
+      fallbackReason = error.message
     }
 
     if (!Array.isArray(flow.questions_json) || !flow.flow_json) {
@@ -596,6 +598,7 @@ The example above shows the object shape only. Your real response must include e
       flow = buildFallbackFlow(category, products)
       aiUsage = emptyUsage
       usedFallback = true
+      fallbackReason = fallbackReason || 'AI did not return a valid question flow shape.'
     }
 
     const { data: latestFlow, error: latestError } = await supabase
@@ -639,6 +642,7 @@ The example above shows the object shape only. Your real response must include e
       success: true,
       flow: savedFlow,
       fallback_used: usedFallback,
+      fallback_reason: fallbackReason,
       ai_usage: aiUsage
     })
   } catch (error) {
