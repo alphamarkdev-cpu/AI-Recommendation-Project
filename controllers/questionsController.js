@@ -433,26 +433,30 @@ ${JSON.stringify(productContext, null, 2)}
 
 Create a reusable routed question bank that can run without calling AI during the user's quiz session.
 
-Rules:
-- Generate 16 to 24 questions.
-- The first question must ask the user's biggest concern and must use field_key "primary_concern".
-- The first question options must be the main concerns supported by the product catalogue.
-- After the first question, create concern-specific follow-up questions for each major concern.
+COUNT AND COVERAGE RULES:
+- Generate exactly 18 question objects in questions_json.
+- Do not generate 2, 8, 10, or 12 questions. The response is invalid unless questions_json.length is exactly 18.
+- q1 must ask the user's biggest concern and must use field_key "primary_concern".
+- q1 options must include at least 4 main concerns supported by the product catalogue.
+- q2-q13 must be concern-specific follow-up questions grouped across the main concerns from q1.
+- q14-q18 must be shared final questions for allergies/avoided ingredients, previous treatments, routine habits, sensitivity/contraindications, and budget.
+- Not every user should answer every question. The flow_json will later choose one relevant path.
+- Design the bank so a user path can contain 6 to 10 questions while the database stores all 18.
+
+QUESTION CONTENT RULES:
 - Create different follow-up paths for concerns such as acne/breakouts, oily skin, dark spots/pigmentation, dryness, sensitivity, aging, dullness, or any other concerns found in the product catalogue.
-- Include enough questions so each concern path can ask 3 to 6 relevant follow-ups before common safety and purchase-fit questions.
-- Include common final questions for allergies/avoided ingredients, previous treatments, routine habits, and budget.
-- Not every user should answer every question. The flow_json will choose a path based on answers.
+- Include severity, duration, subtype, triggers, and sensitivity follow-ups where relevant.
 - Use only these input_type values: "chips", "cards", "scale", "text".
 - Use concise consumer-friendly wording.
 - Every question must have a stable question_id like "q1", "q2", etc.
-- Use sequential question_id values without gaps.
+- Use sequential question_id values from q1 through q18 without gaps.
 - Every field_key must be lowercase snake_case.
 - For chips/cards, options_json must be an array.
 - For scale, options_json must be [1,2,3,4,5].
 - For text, options_json must be an object with a placeholder.
 - Use answer option labels that are easy to branch on later.
 
-Respond ONLY in this exact JSON shape:
+Return ONLY valid JSON with this exact top-level shape. The array below must contain all 18 question objects, not only the sample object:
 {
   "questions_json": [
     {
@@ -465,10 +469,21 @@ Respond ONLY in this exact JSON shape:
       "category": "${category}",
       "section_label": "Assessment"
     }
+    },
+    {
+      "question_id": "q2",
+      "field_key": "acne_severity",
+      "question_text": "How intense are the breakouts right now?",
+      "sub_text": "Use 1 for mild and 5 for very intense.",
+      "input_type": "scale",
+      "options_json": [1, 2, 3, 4, 5],
+      "category": "${category}",
+      "section_label": "Assessment"
+    }
   ]
 }
 
-The example above shows the object shape only. Your real response must include ${MIN_GENERATED_QUESTIONS} to 24 complete question objects in questions_json.
+The shape above shows 2 sample objects only so the field names are clear. Your actual JSON response must include q1 through q18 as 18 complete objects in questions_json.
 `
 
     const model = genAI.getGenerativeModel({
