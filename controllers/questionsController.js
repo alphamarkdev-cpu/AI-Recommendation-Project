@@ -184,7 +184,7 @@ const normaliseGeneratedQuestions = (questions = [], category) => {
   if (!Array.isArray(questions)) return []
 
   return questions
-    .slice(0, 10)
+    .slice(0, 30)
     .map((question, index) => ({
       question_id: question.question_id || `q${index + 1}`,
       field_key: question.field_key || `question_${index + 1}`,
@@ -397,18 +397,26 @@ BRAND CATEGORY: ${category}
 PRODUCTS AND CONCERNS:
 ${JSON.stringify(productContext, null, 2)}
 
-Create reusable questions that can run without calling AI during the user's quiz session.
+Create a reusable routed question bank that can run without calling AI during the user's quiz session.
 
 Rules:
-- Generate exactly 8 questions only.
-- Questions must identify the user's main concern, type, severity, triggers, history, budget, allergies, and routine habits.
+- Generate 16 to 24 questions.
+- The first question must ask the user's biggest concern and must use field_key "primary_concern".
+- The first question options must be the main concerns supported by the product catalogue.
+- After the first question, create concern-specific follow-up questions for each major concern.
+- Create different follow-up paths for concerns such as acne/breakouts, oily skin, dark spots/pigmentation, dryness, sensitivity, aging, dullness, or any other concerns found in the product catalogue.
+- Include enough questions so each concern path can ask 3 to 6 relevant follow-ups before common safety and purchase-fit questions.
+- Include common final questions for allergies/avoided ingredients, previous treatments, routine habits, and budget.
+- Not every user should answer every question. The flow_json will choose a path based on answers.
 - Use only these input_type values: "chips", "cards", "scale", "text".
 - Use concise consumer-friendly wording.
 - Every question must have a stable question_id like "q1", "q2", etc.
+- Use sequential question_id values without gaps.
 - Every field_key must be lowercase snake_case.
 - For chips/cards, options_json must be an array.
 - For scale, options_json must be [1,2,3,4,5].
 - For text, options_json must be an object with a placeholder.
+- Use answer option labels that are easy to branch on later.
 
 Respond ONLY in this exact JSON shape:
 {
@@ -431,8 +439,8 @@ Respond ONLY in this exact JSON shape:
       model: 'gemini-2.5-flash',
       generationConfig: {
         responseMimeType: 'application/json',
-        temperature: 0.2,
-        maxOutputTokens: 3000
+        temperature: 0.25,
+        maxOutputTokens: 7000
       }
     })
     let aiUsage = emptyUsage
@@ -480,11 +488,20 @@ ANSWER VALUE RULES:
 
 FLOW RULES:
 - Keep the quiz short and safe: no loops, no backwards jumps, and never route a question back to itself.
-- It is okay for most nodes to be linear using "default".
-- Add "if" branches only when a user answer should skip an irrelevant question or jump to a more relevant next question.
+- Create an actual decision tree where a user answers only the questions relevant to their concern.
+- The first node must branch from the biggest concern question to different concern-specific paths.
+- Add "if" branches to at least 5 different nodes when those nodes have answer_values_for_if.
+- Prefer branching on the primary concern question, severity questions, subtype questions, duration questions, trigger questions, and sensitivity questions.
+- Each branching node must include at least 2 answer mappings inside "if" when at least 2 answer_values_for_if exist.
+- A branch should skip only questions made less relevant by that answer, or jump to a more relevant next question.
+- Do not skip safety or purchase-fit questions about allergies, avoided ingredients, budget, or previous treatments unless the current question already covers that topic.
 - The final reachable node must route to "END".
 - Every question must still appear as a node, even if some branches skip it.
 - Prefer default routing to the next_linear_question_id shown below.
+- Each user path should usually contain 6 to 10 questions, not all stored questions.
+- Different primary concerns should lead to visibly different follow-up paths.
+- Common final questions such as allergies, previous treatments, routine habits, and budget may be shared by many paths before "END".
+- If fewer than 5 questions have answer_values_for_if, add branches to every question that does have answer_values_for_if.
 
 QUESTIONS AVAILABLE FOR ROUTING:
 ${JSON.stringify(buildFlowPromptQuestions(questions), null, 2)}
