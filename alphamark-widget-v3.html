@@ -1149,6 +1149,7 @@ function showResult(rec, productImages={}, productUrls={}, usage={}){
       <div class="res-hero-text">${rec.skin_assessment}</div>
       <div class="res-concern-row">${badgeHtml}</div>
     </div>
+    ${recommendationBasisPanel(rec)}
     ${tokenUsagePanel(usage)}
   `
 
@@ -1196,6 +1197,27 @@ function showResult(rec, productImages={}, productUrls={}, usage={}){
   html+=`</div>`
   body.innerHTML=html
   body.scrollTop=0
+}
+
+// Shows whether the recommendation used text answers, the uploaded photo, or both.
+function recommendationBasisPanel(rec={}){
+  const basis = rec.recommendation_basis
+  const explanation = rec.basis_explanation
+  if(!basis && !explanation) return ''
+
+  const labels = {
+    text_answers: 'Based on your answers',
+    photo: 'Based on photo analysis',
+    text_and_photo: 'Based on answers and photo',
+    no_photo: 'Based on your answers'
+  }
+
+  return `
+    <div style="margin:16px 28px 0;padding:14px 16px;border:1px solid var(--border);border-radius:8px;background:#fff;color:var(--text2);font-size:12.5px;line-height:1.6;">
+      <div style="font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--brand);margin-bottom:4px;">${labels[basis] || 'Analysis basis'}</div>
+      ${explanation ? `<div>${explanation}</div>` : ''}
+    </div>
+  `
 }
 
 // Builds the small debug panel showing Gemini token usage for this session.
