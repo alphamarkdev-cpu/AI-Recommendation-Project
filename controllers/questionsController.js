@@ -131,6 +131,54 @@ const buildQuestionResponse = (brandCategory, poolQuestions, selectedIds = [], r
 // ── GET ALL FIXED QUESTIONS (personal + lifestyle) ──
 // Returns fixed personal and lifestyle questions in the order they should appear in the widget.
 // Returns the active pre-generated question flow for the authenticated brand and category.
+// Builds a deterministic fallback flow from product concerns when Gemini generation is unavailable.
+const buildFallbackFlow = (category, products) => {
+  const concernSet = new Set()
+  const typeSet = new Set()
+
+  products.forEach(product => {
+    ;(product.concern_tags || []).forEach(tag => {
+      if (tag.concern) concernSet.add(tag.concern)
+    })
+    ;(product.suitable_skin_types || []).forEach(type => {
+      if (type) typeSet.add(type)
+    })
+  })
+
+  const concernOptions = Array.from(concernSet).slice(0, 8)
+  const typeOptions = Array.from(typeSet).slice(0, 6)
+  const concerns = concernOptions.length ? concernOptions : ['Acne', 'Oiliness', 'Dryness', 'Sensitivity']
+  const types = typeOptions.length ? typeOptions : ['Oily', 'Dry', 'Combination', 'Sensitive']
+
+  const questions_json = [
+    { question_id: 'q1', field_key: 'primary_concern', question_text: 'What is your main concern right now?', sub_text: 'Choose the closest match so we can route your assessment.', input_type: 'chips', options_json: concerns, category, section_label: 'Assessment' },
+    { question_id: 'q2', field_key: 'skin_type', question_text: 'Which type describes you best?', sub_text: 'This helps us avoid products that may feel too heavy or too drying.', input_type: 'cards', options_json: types.map(type => ({ label: type, emoji: '', sub: '' })), category, section_label: 'Assessment' },
+    { question_id: 'q3', field_key: 'concern_severity', question_text: 'How intense is this concern currently?', sub_text: 'Use 1 for mild and 5 for very intense.', input_type: 'scale', options_json: [1, 2, 3, 4, 5], category, section_label: 'Assessment' },
+    { question_id: 'q4', field_key: 'concern_duration', question_text: 'How long has this concern been present?', sub_text: 'A rough estimate is enough.', input_type: 'chips', options_json: ['Less than 1 month', '1-3 months', '3-6 months', 'More than 6 months'], category, section_label: 'Assessment' },
+    { question_id: 'q5', field_key: 'known_triggers', question_text: 'What usually triggers or worsens it?', sub_text: 'Choose the strongest trigger.', input_type: 'chips', options_json: ['Stress', 'Sleep', 'Diet', 'Weather', 'Products', 'Not sure'], category, section_label: 'Assessment' },
+    { question_id: 'q6', field_key: 'previous_treatments', question_text: 'Have you already tried anything for this?', sub_text: 'Mention products, treatments, or home remedies.', input_type: 'text', options_json: { placeholder: 'Example: salicylic acid face wash, dermatologist cream...' }, category, section_label: 'Assessment' },
+    { question_id: 'q7', field_key: 'allergies', question_text: 'Any allergies or ingredients you avoid?', sub_text: 'This helps us filter unsafe recommendations.', input_type: 'text', options_json: { placeholder: 'Write none if there are no known allergies' }, category, section_label: 'Assessment' },
+    { question_id: 'q8', field_key: 'budget', question_text: 'What budget range feels comfortable?', sub_text: 'We will keep recommendations practical.', input_type: 'chips', options_json: ['Under 500', '500-1000', '1000-2000', 'No strict budget'], category, section_label: 'Assessment' }
+  ]
+
+  return {
+    questions_json,
+    flow_json: {
+      start: 'q1',
+      nodes: {
+        q1: { default: 'q2' },
+        q2: { default: 'q3' },
+        q3: { default: 'q4' },
+        q4: { default: 'q5' },
+        q5: { default: 'q6' },
+        q6: { default: 'q7' },
+        q7: { default: 'q8' },
+        q8: { next: 'END' }
+      }
+    }
+  }
+}
+
 const getActiveQuestionFlow = async (req, res) => {
   try {
     const category = req.query.category || req.query.brand_category
@@ -216,13 +264,13 @@ ${JSON.stringify(productContext, null, 2)}
 Create a reusable question flow that can run without calling AI during the user's quiz session.
 
 Rules:
-- Generate exactly 20 questions.
+- Generate exactly 8 questions.
 - Questions must identify the user's main concern, type, severity, triggers, history, budget, allergies, and routine habits.
 - Use only these input_type values: "chips", "cards", "scale", "text".
 - Use concise consumer-friendly wording.
 - Every question must have a stable question_id like "q1", "q2", etc.
 - Every field_key must be lowercase snake_case.
-- flow_json must be a decision tree.
+- flow_json must be a simple decision tree.
 - The tree must start with "q1".
 - Branch using answer text exactly as it appears in options_json.
 - Use "END" when the quiz should go to photo/recommendation.
@@ -251,7 +299,7 @@ Respond ONLY in this exact JSON shape:
         },
         "default": "q4"
       },
-      "q20": {
+      "q8": {
         "next": "END"
       }
     }
@@ -264,12 +312,22 @@ Respond ONLY in this exact JSON shape:
       generationConfig: {
         responseMimeType: 'application/json',
         temperature: 0.2,
-        maxOutputTokens: 7000
+        maxOutputTokens: 3000
       }
     })
-    const result = await generateWithRetry(model, prompt)
-    const aiUsage = formatGeminiUsage(result.response.usageMetadata)
-    const flow = await parseJsonResponseWithRepair(model, result.response.text())
+    let aiUsage = emptyUsage
+    let flow
+    let usedFallback = false
+
+    try {
+      const result = await generateWithRetry(model, prompt)
+      aiUsage = formatGeminiUsage(result.response.usageMetadata)
+      flow = await parseJsonResponseWithRepair(model, result.response.text())
+    } catch (error) {
+      console.error('Gemini flow generation failed. Using deterministic fallback flow:', error.message)
+      flow = buildFallbackFlow(category, products)
+      usedFallback = true
+    }
 
     if (!Array.isArray(flow.questions_json) || !flow.flow_json) {
       return res.status(500).json({ error: 'AI did not return a valid question flow.' })
@@ -315,6 +373,7 @@ Respond ONLY in this exact JSON shape:
     res.json({
       success: true,
       flow: savedFlow,
+      fallback_used: usedFallback,
       ai_usage: aiUsage
     })
   } catch (error) {
