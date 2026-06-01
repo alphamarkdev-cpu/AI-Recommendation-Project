@@ -34,6 +34,40 @@ const getActiveBrandProducts = async brandId => {
   return data || []
 }
 
+const getClarificationCandidates = async (brandId, category, answeredFields = []) => {
+  const { data, error } = await supabase
+    .from('brand_question_flows')
+    .select('questions_json')
+    .eq('brand_id', brandId)
+    .eq('category', category)
+    .eq('is_active', true)
+    .order('version', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  if (error) throw error
+
+  const questions = Array.isArray(data?.questions_json)
+    ? data.questions_json
+    : []
+  const answered = new Set(answeredFields.filter(Boolean))
+
+  return questions
+    .filter(question => question?.field_key && !answered.has(question.field_key))
+    .filter(question => ['chips', 'cards', 'scale', 'text'].includes(question.input_type))
+    .slice(0, 12)
+    .map(question => ({
+      question_id: question.question_id,
+      field_key: question.field_key,
+      question_text: question.question_text,
+      sub_text: question.sub_text || '',
+      input_type: question.input_type,
+      options_json: question.options_json || [],
+      category: question.category || category,
+      section_label: question.section_label || 'Clarification'
+    }))
+}
+
 // Creates a personalized recommendation by matching products, prompting Gemini, and saving the session.
 const getRecommendation = async (req, res) => {
   try {
@@ -47,7 +81,8 @@ const getRecommendation = async (req, res) => {
       additional_info,
       photo_analysis,
       photo_image,
-      all_answers
+      all_answers,
+      clarification_answers
     } = req.body
 
     const brandId   = req.brand.brand_id
@@ -57,6 +92,16 @@ const getRecommendation = async (req, res) => {
     const skinTypes    = Array.isArray(skin_type) ? skin_type : [skin_type]
     const concernsList = Array.isArray(concerns)  ? concerns  : [concerns]
     const photoImage = parseDataUrlImage(photo_image)
+    const hasClarificationAnswers = clarification_answers &&
+      typeof clarification_answers === 'object' &&
+      Object.keys(clarification_answers).length > 0
+    const answeredFields = [
+      ...Object.keys(all_answers || {}),
+      ...Object.keys(clarification_answers || {})
+    ]
+    const clarificationCandidates = photoImage && !hasClarificationAnswers
+      ? await getClarificationCandidates(brandId, brandCategory, answeredFields)
+      : []
 
     // . Step 1: Fetch matching products .
     const matchingProducts = photoImage
@@ -105,9 +150,13 @@ CONSUMER PROFILE:
 - Budget: ${budget || 'Not specified'}
 - Details: ${additional_info || 'None'}
 - Photo: ${photoImage ? 'Uploaded skin photo is attached for visual analysis' : 'Not provided'}
+- Clarification answers: ${hasClarificationAnswers ? JSON.stringify(clarification_answers, null, 2) : 'None yet'}
 
 AVAILABLE PRODUCTS IN DATABASE (ONLY use these â€” do NOT invent products):
 ${JSON.stringify(productsContext, null, 2)}
+
+AVAILABLE STORED CLARIFICATION QUESTIONS:
+${JSON.stringify(clarificationCandidates, null, 2)}
 
 YOUR TASK:
 1. If a photo is attached, first verify that the photo is relevant to the brand category.
@@ -115,17 +164,25 @@ YOUR TASK:
 3. If the uploaded photo is not relevant to the brand category, return blocked=true in photo_verification and do not create product routines.
 4. If the photo is relevant, inspect visible signs for that category. For skincare: oiliness, redness, acne, texture, marks, tanning, pigmentation, dryness, irritation. For haircare: scalp visibility, flakes, oiliness, density, thinning, hairline, dryness, frizz, damage.
 5. Compare photo evidence with the consumer's text answers.
-6. If text answers and photo evidence conflict, choose the stronger basis and explain it in recommendation_basis and basis_explanation.
-7. Pick the best 3-4 products from the list above that match the chosen basis.
-8. Skip any product with ingredients the consumer is allergic to.
-9. Build a morning AND evening routine using only those products.
-10. Keep all text SHORT, CLEAR, and consumer-friendly.
-11. Write routine copy like a premium card: benefit-led, warm, and easy to scan.
-12. Add lifestyle recommendations based on the consumer's sleep, water, diet, stress, activity, city, occupation, smoking/drinking, sugar intake, and other lifestyle answers.
+6. If text answers and photo evidence conflict and clarification answers are "None yet", ask 2-3 extra questions from AVAILABLE STORED CLARIFICATION QUESTIONS before creating a routine.
+7. Clarification questions must be copied exactly from AVAILABLE STORED CLARIFICATION QUESTIONS and must not repeat already answered fields.
+8. If clarification answers are present, use them to resolve the conflict and create the final recommendation.
+9. If text and photo do not conflict, create the final recommendation immediately.
+10. Pick the best 3-4 products from the list above that match the resolved profile.
+11. Skip any product with ingredients the consumer is allergic to.
+12. Build a morning AND evening routine using only those products.
+13. Keep all text SHORT, CLEAR, and consumer-friendly.
+14. Write routine copy like a premium card: benefit-led, warm, and easy to scan.
+15. Add lifestyle recommendations based on the consumer's sleep, water, diet, stress, activity, city, occupation, smoking/drinking, sugar intake, and other lifestyle answers.
 
 STRICT RULES:
 - photo_verification.blocked: true only when the uploaded photo is irrelevant to the brand category or cannot be assessed.
 - photo_verification.message: consumer-friendly one sentence explaining the blocker, or null when not blocked.
+- clarification_required: true only when the relevant photo and text answers conflict and clarification answers are not yet provided.
+- clarification_questions: when clarification_required is true, return exactly 2 or 3 question objects from AVAILABLE STORED CLARIFICATION QUESTIONS.
+- clarification_questions: when clarification_required is false, return [].
+- If fewer than 2 AVAILABLE STORED CLARIFICATION QUESTIONS exist, do not ask clarification questions; resolve the recommendation from the best available evidence.
+- If clarification_required is true, leave morning_routine, evening_routine, tips, and lifestyle_recommendations as empty arrays.
 - recommendation_basis: exactly one of "text_answers", "photo", "text_and_photo", or "no_photo".
 - basis_explanation: one short sentence. If text and photo conflict, say which signal was stronger and why.
 - skin_assessment: MAX 2 sentences â€” be specific about their concern
@@ -150,6 +207,9 @@ Respond ONLY in this exact JSON â€” no markdown, no extra text:
   },
   "recommendation_basis": "text_and_photo",
   "basis_explanation": "The routine uses both your answers and visible skin signs from the uploaded photo.",
+  "clarification_required": false,
+  "clarification_reason": null,
+  "clarification_questions": [],
   "skin_assessment": "2 sentences max about their specific condition.",
   "concern_level": "Mild",
   "morning_routine": [
@@ -219,6 +279,28 @@ Respond ONLY in this exact JSON â€” no markdown, no extra text:
       })
     }
 
+    if (recommendation.clarification_required && Array.isArray(recommendation.clarification_questions)) {
+      const candidateByField = new Map(clarificationCandidates.map(question => [question.field_key, question]))
+      const selectedClarificationQuestions = recommendation.clarification_questions
+        .map(question => candidateByField.get(question.field_key))
+        .filter(Boolean)
+        .slice(0, 3)
+
+      if (selectedClarificationQuestions.length < 2) {
+        throw new Error('Gemini requested clarification but did not choose at least 2 stored clarification questions.')
+      }
+
+      return res.json({
+        success: true,
+        needs_clarification: true,
+        clarification_reason: recommendation.clarification_reason || 'A few more details will help us match your answers with the uploaded photo.',
+        clarification_questions: selectedClarificationQuestions,
+        photo_verification: recommendation.photo_verification || null,
+        photo_used: Boolean(photoImage),
+        ai_usage: aiUsage
+      })
+    }
+
     console.log('Gemini token usage - recommendation:', aiUsage)
     
     // . Step 6: Save session .
@@ -231,6 +313,7 @@ Respond ONLY in this exact JSON â€” no markdown, no extra text:
           concerns:  concernsList,
           age, acne_duration, allergies, budget,
           additional_info,
+          clarification_answers: clarification_answers || null,
           ...(all_answers || {})
         },
         photo_analysis_json: photoImage

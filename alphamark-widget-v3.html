@@ -541,6 +541,8 @@ let questionHistory = []
 let cur     = 0
 let answers = {}
 let photoB64= null
+let clarificationAnswers = {}
+let activeClarificationQuestions = []
 let tokenUsage = {
   question_selection: null,
   recommendation: null
@@ -775,6 +777,14 @@ function setDual(key,field,val){
 // Saves a selected answer and updates the active visual state for option controls.
 function pick(key,val,el,type){
   answers[key]=val
+  const parent = el.closest(type==='chip'?'.chips':type==='card'?'.cards2':'.scale-row')
+  parent.querySelectorAll(type==='chip'?'.chip':type==='card'?'.card-opt':'.scale-btn').forEach(e=>e.classList.remove('sel'))
+  el.classList.add('sel')
+}
+
+// Stores one answer from the photo/text clarification step.
+function pickClarification(key,val,el,type){
+  clarificationAnswers[key]=val
   const parent = el.closest(type==='chip'?'.chips':type==='card'?'.cards2':'.scale-row')
   parent.querySelectorAll(type==='chip'?'.chip':type==='card'?'.card-opt':'.scale-btn').forEach(e=>e.classList.remove('sel'))
   el.classList.add('sel')
@@ -1091,7 +1101,8 @@ async function analyse(){
     additional_info: buildAdditionalInfo(),
     photo_analysis: photoB64 ? 'Consumer uploaded a skin photo for visual analysis' : null,
     photo_image: photoB64,
-    all_answers: answers
+    all_answers: answers,
+    clarification_answers: clarificationAnswers
   }
 
   try {
@@ -1101,7 +1112,11 @@ async function analyse(){
       body:JSON.stringify(payload)
     })
     const data=await res.json()
-    if(data.success){
+    if(data.success && data.needs_clarification){
+      tokenUsage.recommendation = data.ai_usage || null
+      showClarificationQuestions(data.clarification_questions || [], data.clarification_reason)
+    }
+    else if(data.success){
       tokenUsage.recommendation = data.ai_usage || null
       logSessionTokenUsage()
       showResult(data.recommendation, data.product_images || {}, data.product_urls || {}, tokenUsage)
@@ -1198,6 +1213,82 @@ function showResult(rec, productImages={}, productUrls={}, usage={}){
   html+=`</div>`
   body.innerHTML=html
   body.scrollTop=0
+}
+
+// Renders 2-3 extra stored questions when photo evidence conflicts with text answers.
+function showClarificationQuestions(questions=[], reason=''){
+  showScreen('result')
+  activeClarificationQuestions = questions.map(normaliseStoredQuestion)
+  const body=document.getElementById('result-body')
+
+  if(!activeClarificationQuestions.length){
+    showError('We need a little more clarity, but no follow-up questions are available right now.')
+    return
+  }
+
+  const html = `
+    <div style="padding:42px 28px;max-width:760px;margin:0 auto;">
+      <div style="font-size:10px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--brand);margin-bottom:10px;">A little more clarity</div>
+      <div style="font-family:'Instrument Serif',serif;font-size:28px;line-height:1.2;color:var(--text);margin-bottom:8px;">Help us match your photo and answers</div>
+      <div style="font-size:13px;color:var(--text3);line-height:1.7;margin-bottom:26px;">${reason || 'Your photo and answers point to slightly different concerns, so we need a few quick details before recommending products.'}</div>
+      ${activeClarificationQuestions.map(clarificationQuestionHTML).join('')}
+      <div class="error-actions" style="justify-content:flex-start;margin-top:26px;">
+        <button class="retry-btn" onclick="submitClarificationAnswers()">Continue Analysis</button>
+      </div>
+    </div>
+  `
+
+  body.innerHTML = html
+  body.scrollTop = 0
+}
+
+// Builds one clarification question using the same option vocabulary as the main quiz.
+function clarificationQuestionHTML(q){
+  let opts = ''
+  const saved = clarificationAnswers[q.field_key]
+
+  if(q.input_type==='text'){
+    opts = `<input class="txt-inp" id="ci-${q.field_key}" placeholder="${q.options_json?.placeholder||'Type your answer...'}" value="${saved||''}" oninput="clarificationAnswers['${q.field_key}']=this.value">`
+  }
+  else if(q.input_type==='chips'){
+    const chips = optionList(q.options_json)
+    opts = `<div class="chips">${chips.map(c=>{
+      const label = optionLabel(c)
+      return `<button class="chip${saved===label?' sel':''}" onclick="pickClarification('${q.field_key}','${label}',this,'chip')">${label}</button>`
+    }).join('')}</div>`
+  }
+  else if(q.input_type==='cards'){
+    const cards = optionList(q.options_json)
+    opts = `<div class="cards2">${cards.map(c=>{
+      const label = optionLabel(c)
+      const emoji = typeof c === 'object' ? c.emoji || '' : ''
+      const sub = typeof c === 'object' ? c.sub || c.description || '' : ''
+      return `<div class="card-opt${saved===label?' sel':''}" onclick="pickClarification('${q.field_key}','${label}',this,'card')"><span class="card-emoji">${emoji}</span><div class="card-label">${label}</div><div class="card-sub">${sub}</div></div>`
+    }).join('')}</div>`
+  }
+  else if(q.input_type==='scale'){
+    const lbls = ['Very low','','Moderate','','Very high']
+    opts = `<div class="scale-row">${[1,2,3,4,5].map((n,idx)=>`<button class="scale-btn${saved===String(n)?' sel':''}" onclick="pickClarification('${q.field_key}','${n}',this,'scale')">${n}<span class="s-lbl">${lbls[idx]||''}</span></button>`).join('')}</div>`
+  }
+
+  return `
+    <div style="padding:20px 0;border-top:1px solid var(--border);">
+      <div class="q-title" style="font-size:22px;margin-bottom:6px;">${q.question_text}</div>
+      <div class="q-sub" style="margin-bottom:16px;">${q.sub_text||''}</div>
+      ${opts}
+    </div>
+  `
+}
+
+// Sends clarification answers back through the same recommendation endpoint.
+function submitClarificationAnswers(){
+  activeClarificationQuestions.forEach(q=>{
+    if(q.input_type==='text'){
+      const el=document.getElementById('ci-'+q.field_key)
+      if(el) clarificationAnswers[q.field_key]=el.value
+    }
+  })
+  analyse()
 }
 
 // Shows whether the recommendation used text answers, the uploaded photo, or both.
@@ -1404,6 +1495,8 @@ function showPhotoMismatchError(msg){
 // Returns to the upload screen and clears the mismatched image.
 function retryWithNewPhoto(){
   photoB64 = null
+  clarificationAnswers = {}
+  activeClarificationQuestions = []
   const input = document.getElementById('photo-input')
   const img = document.getElementById('photo-prev')
   const analyzeBtn = document.getElementById('analyze-btn')
@@ -1423,6 +1516,8 @@ function retryWithNewPhoto(){
 // Clears the image and immediately runs recommendation from text answers only.
 function retryWithoutPhoto(){
   photoB64 = null
+  clarificationAnswers = {}
+  activeClarificationQuestions = []
   const input = document.getElementById('photo-input')
   const img = document.getElementById('photo-prev')
   const analyzeBtn = document.getElementById('analyze-btn')
@@ -1450,7 +1545,7 @@ function showFallback(){
 
 // Resets local widget state so the user can start the assessment again.
 function restart(){
-  allQ=[]; cur=0; answers={}; photoB64=null
+  allQ=[]; cur=0; answers={}; photoB64=null; clarificationAnswers={}; activeClarificationQuestions=[]
   useStoredFlow=false; flowDefinition=null; flowNodes={}; questionHistory=[]
   document.getElementById('photo-prev').style.display='none'
   document.getElementById('analyze-btn').style.display='none'
