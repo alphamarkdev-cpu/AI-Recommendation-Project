@@ -56,6 +56,39 @@ const parseJsonResponse = text => {
   }
 }
 
+// Repairs malformed Gemini JSON by asking the model to return only valid JSON.
+const repairJsonResponse = async (model, brokenJson, parseError) => {
+  const repairPrompt = `
+The following text was intended to be JSON, but JSON.parse failed with:
+${parseError.message}
+
+Repair the text into valid JSON.
+
+Rules:
+- Return ONLY valid JSON.
+- Do not add markdown.
+- Do not explain anything.
+- Preserve all keys and values as much as possible.
+- Keep the same top-level shape.
+
+BROKEN JSON:
+${brokenJson}
+`
+
+  const repairedResult = await generateWithRetry(model, repairPrompt, 2)
+  return parseJsonResponse(repairedResult.response.text())
+}
+
+// Parses Gemini output and falls back to one repair pass when JSON is malformed.
+const parseJsonResponseWithRepair = async (model, text) => {
+  try {
+    return parseJsonResponse(text)
+  } catch (error) {
+    console.error('Initial Gemini JSON parse failed:', error.message)
+    return repairJsonResponse(model, text, error)
+  }
+}
+
 // Builds the final dynamic-question response and fills any missing AI selections with fallback questions.
 const buildQuestionResponse = (brandCategory, poolQuestions, selectedIds = [], reasoning = {}, aiUsage = emptyUsage) => {
   const used = new Set()
@@ -236,7 +269,7 @@ Respond ONLY in this exact JSON shape:
     })
     const result = await generateWithRetry(model, prompt)
     const aiUsage = formatGeminiUsage(result.response.usageMetadata)
-    const flow = parseJsonResponse(result.response.text())
+    const flow = await parseJsonResponseWithRepair(model, result.response.text())
 
     if (!Array.isArray(flow.questions_json) || !flow.flow_json) {
       return res.status(500).json({ error: 'AI did not return a valid question flow.' })
