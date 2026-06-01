@@ -38,8 +38,9 @@ const emptyUsage = {
   cached_tokens: 0
 }
 
-const MIN_GENERATED_QUESTIONS = 16
-const MIN_BRANCHING_NODES = 5
+const GENERATED_QUESTION_COUNT = 14
+const MIN_GENERATED_QUESTIONS = 12
+const MIN_BRANCHING_NODES = 4
 
 // Parses Gemini JSON output, including responses wrapped in markdown code fences.
 const parseJsonResponse = text => {
@@ -410,18 +411,15 @@ const generateQuestionFlow = async (req, res) => {
       return res.status(404).json({ error: 'No active products found for this brand.' })
     }
 
-    const productContext = products.map(product => ({
+    const productContext = products.slice(0, 20).map(product => ({
       name: product.name,
       category: product.category,
-      description: product.description,
       suitable_skin_types: product.suitable_skin_types,
-      ingredients: product.ingredients.map(ingredient => ingredient.name),
-      concerns: product.concern_tags.map(tag => ({
-        concern: tag.concern,
-        severity_level: tag.severity_level,
-        priority_score: tag.priority_score
-      }))
+      concerns: product.concern_tags.map(tag => tag.concern)
     }))
+    const catalogueConcerns = Array.from(new Set(
+      products.flatMap(product => (product.concern_tags || []).map(tag => tag.concern).filter(Boolean))
+    )).slice(0, 10)
 
     const questionsPrompt = `
 You are building reusable quiz questions for ${req.brand.name}.
@@ -431,17 +429,20 @@ BRAND CATEGORY: ${category}
 PRODUCTS AND CONCERNS:
 ${JSON.stringify(productContext, null, 2)}
 
+CATALOGUE CONCERNS:
+${JSON.stringify(catalogueConcerns)}
+
 Create a reusable routed question bank that can run without calling AI during the user's quiz session.
 
 COUNT AND COVERAGE RULES:
-- Generate exactly 18 question objects in questions_json.
-- Do not generate 2, 8, 10, or 12 questions. The response is invalid unless questions_json.length is exactly 18.
+- Generate exactly ${GENERATED_QUESTION_COUNT} question objects in questions_json.
+- Do not generate 2, 8, 10, or 18 questions. The response is invalid unless questions_json.length is exactly ${GENERATED_QUESTION_COUNT}.
 - q1 must ask the user's biggest concern and must use field_key "primary_concern".
 - q1 options must include at least 4 main concerns supported by the product catalogue.
-- q2-q13 must be concern-specific follow-up questions grouped across the main concerns from q1.
-- q14-q18 must be shared final questions for allergies/avoided ingredients, previous treatments, routine habits, sensitivity/contraindications, and budget.
+- q2-q10 must be concern-specific follow-up questions grouped across the main concerns from q1.
+- q11-q14 must be shared final questions for allergies/avoided ingredients, previous treatments, routine habits, and budget.
 - Not every user should answer every question. The flow_json will later choose one relevant path.
-- Design the bank so a user path can contain 6 to 10 questions while the database stores all 18.
+- Design the bank so a user path can contain 5 to 8 questions while the database stores all ${GENERATED_QUESTION_COUNT}.
 
 QUESTION CONTENT RULES:
 - Create different follow-up paths for concerns such as acne/breakouts, oily skin, dark spots/pigmentation, dryness, sensitivity, aging, dullness, or any other concerns found in the product catalogue.
@@ -449,41 +450,30 @@ QUESTION CONTENT RULES:
 - Use only these input_type values: "chips", "cards", "scale", "text".
 - Use concise consumer-friendly wording.
 - Every question must have a stable question_id like "q1", "q2", etc.
-- Use sequential question_id values from q1 through q18 without gaps.
+- Use sequential question_id values from q1 through q${GENERATED_QUESTION_COUNT} without gaps.
 - Every field_key must be lowercase snake_case.
 - For chips/cards, options_json must be an array.
 - For scale, options_json must be [1,2,3,4,5].
 - For text, options_json must be an object with a placeholder.
 - Use answer option labels that are easy to branch on later.
 
-Return ONLY valid JSON with this exact top-level shape. The array below must contain all 18 question objects, not only the sample object:
+Return ONLY valid JSON in this shape:
 {
   "questions_json": [
     {
       "question_id": "q1",
       "field_key": "primary_concern",
-      "question_text": "What is your main concern right now?",
-      "sub_text": "Choose the closest match.",
+      "question_text": "...",
+      "sub_text": "...",
       "input_type": "chips",
-      "options_json": ["Acne", "Oily skin", "Dryness"],
-      "category": "${category}",
-      "section_label": "Assessment"
-    }
-    },
-    {
-      "question_id": "q2",
-      "field_key": "acne_severity",
-      "question_text": "How intense are the breakouts right now?",
-      "sub_text": "Use 1 for mild and 5 for very intense.",
-      "input_type": "scale",
-      "options_json": [1, 2, 3, 4, 5],
+      "options_json": ["...", "..."],
       "category": "${category}",
       "section_label": "Assessment"
     }
   ]
 }
 
-The shape above shows 2 sample objects only so the field names are clear. Your actual JSON response must include q1 through q18 as 18 complete objects in questions_json.
+The questions_json array in your real response must contain q1 through q${GENERATED_QUESTION_COUNT} as ${GENERATED_QUESTION_COUNT} complete objects.
 `
 
     const model = genAI.getGenerativeModel({
@@ -491,7 +481,7 @@ The shape above shows 2 sample objects only so the field names are clear. Your a
       generationConfig: {
         responseMimeType: 'application/json',
         temperature: 0.25,
-        maxOutputTokens: 7000
+        maxOutputTokens: 4500
       }
     })
     let aiUsage = emptyUsage
@@ -500,15 +490,54 @@ The shape above shows 2 sample objects only so the field names are clear. Your a
     let fallbackReason = null
 
     try {
-      const questionsResult = await generateWithRetry(model, questionsPrompt)
-      const questionsUsage = formatGeminiUsage(questionsResult.response.usageMetadata)
-      const questionsResponse = await parseJsonResponseWithRepair(model, questionsResult.response.text())
-      const questions = normaliseGeneratedQuestions(extractQuestionsFromAi(questionsResponse), category)
+      let questionsResult = await generateWithRetry(model, questionsPrompt)
+      let questionsUsage = formatGeminiUsage(questionsResult.response.usageMetadata)
+      let questionsResponse = await parseJsonResponseWithRepair(model, questionsResult.response.text())
+      let questions = normaliseGeneratedQuestions(extractQuestionsFromAi(questionsResponse), category)
 
       if (!questions.length) {
         throw new Error('Gemini did not return usable questions.')
       }
-      assertGeneratedQuestionBank(questions)
+
+      try {
+        assertGeneratedQuestionBank(questions)
+      } catch (qualityError) {
+        if (questions.length >= MIN_GENERATED_QUESTIONS) throw qualityError
+
+        const retryPrompt = `
+Your previous response returned only ${questions.length} usable questions.
+
+Regenerate the complete question bank now.
+
+Rules:
+- Return ONLY valid JSON.
+- Top-level key must be "questions_json".
+- questions_json must contain exactly ${GENERATED_QUESTION_COUNT} complete question objects.
+- Use question_id values q1 through q${GENERATED_QUESTION_COUNT} with no gaps.
+- q1 field_key must be "primary_concern" and must have at least 4 concern options.
+- q2-q10 must be concern-specific follow-up questions.
+- q11-q14 must be shared final questions: allergies/avoided ingredients, previous treatments, routine habits, and budget.
+- Use only input_type: "chips", "cards", "scale", "text".
+- Do not include markdown or explanations.
+
+BRAND CATEGORY: ${category}
+CATALOGUE CONCERNS: ${JSON.stringify(catalogueConcerns)}
+`
+
+        questionsResult = await generateWithRetry(model, retryPrompt, 2)
+        const retryUsage = formatGeminiUsage(questionsResult.response.usageMetadata)
+        questionsUsage = {
+          input_tokens: questionsUsage.input_tokens + retryUsage.input_tokens,
+          output_tokens: questionsUsage.output_tokens + retryUsage.output_tokens,
+          thinking_tokens: questionsUsage.thinking_tokens + retryUsage.thinking_tokens,
+          other_tokens: questionsUsage.other_tokens + retryUsage.other_tokens,
+          total_tokens: questionsUsage.total_tokens + retryUsage.total_tokens,
+          cached_tokens: questionsUsage.cached_tokens + retryUsage.cached_tokens
+        }
+        questionsResponse = await parseJsonResponseWithRepair(model, questionsResult.response.text())
+        questions = normaliseGeneratedQuestions(extractQuestionsFromAi(questionsResponse), category)
+        assertGeneratedQuestionBank(questions)
+      }
 
       const flowPrompt = `
 You are creating the stored routing JSON for the AlphaMark quiz widget.
@@ -543,7 +572,7 @@ FLOW RULES:
 - Keep the quiz short and safe: no loops, no backwards jumps, and never route a question back to itself.
 - Create an actual decision tree where a user answers only the questions relevant to their concern.
 - The first node must branch from the biggest concern question to different concern-specific paths.
-- Add "if" branches to at least 5 different nodes when those nodes have answer_values_for_if.
+- Add "if" branches to at least ${MIN_BRANCHING_NODES} different nodes when those nodes have answer_values_for_if.
 - Prefer branching on the primary concern question, severity questions, subtype questions, duration questions, trigger questions, and sensitivity questions.
 - Each branching node must include at least 2 answer mappings inside "if" when at least 2 answer_values_for_if exist.
 - A branch should skip only questions made less relevant by that answer, or jump to a more relevant next question.
@@ -551,10 +580,10 @@ FLOW RULES:
 - The final reachable node must route to "END".
 - Every question must still appear as a node, even if some branches skip it.
 - Prefer default routing to the next_linear_question_id shown below.
-- Each user path should usually contain 6 to 10 questions, not all stored questions.
+- Each user path should usually contain 5 to 8 questions, not all stored questions.
 - Different primary concerns should lead to visibly different follow-up paths.
 - Common final questions such as allergies, previous treatments, routine habits, and budget may be shared by many paths before "END".
-- If fewer than 5 questions have answer_values_for_if, add branches to every question that does have answer_values_for_if.
+- If fewer than ${MIN_BRANCHING_NODES} questions have answer_values_for_if, add branches to every question that does have answer_values_for_if.
 
 QUESTIONS AVAILABLE FOR ROUTING:
 ${JSON.stringify(buildFlowPromptQuestions(questions), null, 2)}
