@@ -38,6 +38,9 @@ const emptyUsage = {
   cached_tokens: 0
 }
 
+const MIN_GENERATED_QUESTIONS = 16
+const MIN_BRANCHING_NODES = 5
+
 // Parses Gemini JSON output, including responses wrapped in markdown code fences.
 const parseJsonResponse = text => {
   const cleaned = text.replace(/```json|```/g, '').trim()
@@ -306,6 +309,37 @@ const normaliseGeneratedFlow = (flowJson, questions) => {
   return normalised
 }
 
+const countBranchingNodes = flowJson => Object.values(flowJson.nodes || {})
+  .filter(node => node?.if && Object.keys(node.if).length >= 2)
+  .length
+
+const assertGeneratedQuestionBank = questions => {
+  if (questions.length < MIN_GENERATED_QUESTIONS) {
+    throw new Error(`Gemini returned only ${questions.length} questions; expected at least ${MIN_GENERATED_QUESTIONS}.`)
+  }
+
+  if (questions[0]?.question_id !== 'q1' || questions[0]?.field_key !== 'primary_concern') {
+    throw new Error('Gemini must start with q1 using field_key primary_concern.')
+  }
+
+  const primaryConcernOptions = optionLabels(questions[0])
+  if (primaryConcernOptions.length < 3) {
+    throw new Error('Gemini primary_concern question must include at least 3 concern options.')
+  }
+}
+
+const assertGeneratedDecisionTree = flowJson => {
+  const branchCount = countBranchingNodes(flowJson)
+  if (branchCount < MIN_BRANCHING_NODES) {
+    throw new Error(`Gemini returned only ${branchCount} branching nodes; expected at least ${MIN_BRANCHING_NODES}.`)
+  }
+
+  const firstNode = flowJson.nodes?.q1
+  if (!firstNode?.if || Object.keys(firstNode.if).length < 3) {
+    throw new Error('Gemini q1 must branch to at least 3 concern-specific paths.')
+  }
+}
+
 // Accepts common Gemini shapes and returns the generated questions array.
 const extractQuestionsFromAi = aiResponse => {
   if (Array.isArray(aiResponse)) return aiResponse
@@ -433,6 +467,8 @@ Respond ONLY in this exact JSON shape:
     }
   ]
 }
+
+The example above shows the object shape only. Your real response must include ${MIN_GENERATED_QUESTIONS} to 24 complete question objects in questions_json.
 `
 
     const model = genAI.getGenerativeModel({
@@ -456,6 +492,7 @@ Respond ONLY in this exact JSON shape:
       if (!questions.length) {
         throw new Error('Gemini did not return usable questions.')
       }
+      assertGeneratedQuestionBank(questions)
 
       const flowPrompt = `
 You are creating the stored routing JSON for the AlphaMark quiz widget.
@@ -519,6 +556,8 @@ Respond in this exact top-level shape:
     }
   }
 }
+
+The example above shows the object shape only. Your real response must include every generated question_id in nodes and must satisfy all branching rules.
 `
 
       let flowJson = null
@@ -528,6 +567,7 @@ Respond in this exact top-level shape:
         const flowUsage = formatGeminiUsage(flowResult.response.usageMetadata)
         const flowResponse = await parseJsonResponseWithRepair(model, flowResult.response.text())
         flowJson = normaliseGeneratedFlow(extractFlowFromAi(flowResponse), questions)
+        assertGeneratedDecisionTree(flowJson)
         aiUsage = {
           input_tokens: questionsUsage.input_tokens + flowUsage.input_tokens,
           output_tokens: questionsUsage.output_tokens + flowUsage.output_tokens,
@@ -537,14 +577,13 @@ Respond in this exact top-level shape:
           cached_tokens: questionsUsage.cached_tokens + flowUsage.cached_tokens
         }
       } catch (flowError) {
-        console.error('Gemini flow routing failed. Using linear flow for Gemini questions:', flowError.message)
-        flowJson = buildLinearFlow(questions)
-        aiUsage = questionsUsage
+        console.error('Gemini flow routing failed:', flowError.message)
+        throw flowError
       }
 
       flow = {
         questions_json: questions,
-        flow_json: flowJson || buildLinearFlow(questions)
+        flow_json: flowJson
       }
     } catch (error) {
       console.error('Gemini flow generation failed. Using deterministic fallback flow:', error.message)
