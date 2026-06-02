@@ -79,6 +79,15 @@ const createBrandForShop = async shop => {
   const slug = shopSlug(shop)
   const apiKey = `shop_${crypto.randomBytes(18).toString('hex')}`
 
+  const { data: existingBrand, error: existingBrandError } = await supabase
+    .from('brands')
+    .select('brand_id, api_key, product_category')
+    .eq('slug', slug)
+    .maybeSingle()
+
+  if (existingBrandError) throw existingBrandError
+  if (existingBrand) return existingBrand
+
   const { data, error } = await supabase
     .from('brands')
     .insert({
@@ -91,6 +100,17 @@ const createBrandForShop = async shop => {
     })
     .select('brand_id, api_key, product_category')
     .single()
+
+  if (error?.code === '23505') {
+    const { data: brandAfterConflict, error: conflictLookupError } = await supabase
+      .from('brands')
+      .select('brand_id, api_key, product_category')
+      .eq('slug', slug)
+      .single()
+
+    if (conflictLookupError) throw conflictLookupError
+    return brandAfterConflict
+  }
 
   if (error) throw error
   return data
