@@ -1,0 +1,56 @@
+<div
+  id="alphamark-widget-root"
+  data-api-url="{{ block.settings.api_url }}"
+  data-brand-key="{{ block.settings.brand_key }}"
+  data-brand-category="{{ block.settings.brand_category }}"
+  data-shop-domain="{{ shop.permanent_domain }}"
+></div>
+
+<script>
+  window.AlphaMarkWidgetConfig = window.AlphaMarkWidgetConfig || {};
+  window.AlphaMarkWidgetConfig.apiUrl = "{{ block.settings.api_url }}";
+  window.AlphaMarkWidgetConfig.brandKey = "{{ block.settings.brand_key }}";
+  window.AlphaMarkWidgetConfig.brandCategory = "{{ block.settings.brand_category }}";
+  window.AlphaMarkWidgetConfig.shopDomain = "{{ shop.permanent_domain }}";
+</script>
+
+<script
+  src="{{ block.settings.api_url }}/public/alphamark-shopify-widget.js"
+  data-api-url="{{ block.settings.api_url }}"
+  data-brand-key="{{ block.settings.brand_key }}"
+  data-category="{{ block.settings.brand_category }}"
+  data-shop-domain="{{ shop.permanent_domain }}"
+  defer
+></script>
+
+{% schema %}
+{
+  "name": "AlphaMark AI Advisor",
+  "target": "body",
+  "settings": [
+    {
+      "type": "text",
+      "id": "api_url",
+      "label": "Backend API URL",
+      "default": "https://ai-recommendation-project-production.up.railway.app"
+    },
+    {
+      "type": "text",
+      "id": "brand_key",
+      "label": "Brand API Key",
+      "default": "test-api-key-001"
+    },
+    {
+      "type": "select",
+      "id": "brand_category",
+      "label": "Brand category",
+      "default": "skincare",
+      "options": [
+        { "value": "skincare", "label": "Skincare" },
+        { "value": "haircare", "label": "Haircare" },
+        { "value": "supplements", "label": "Supplements" }
+      ]
+    }
+  ]
+}
+{% endschema %}
