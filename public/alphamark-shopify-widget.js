@@ -1,10 +1,12 @@
 (function () {
   const script = document.currentScript
   const apiUrl = (script?.dataset.apiUrl || new URL(script.src).origin).replace(/\/$/, '')
-  const brandKey = script?.dataset.brandKey || ''
-  const category = script?.dataset.category || 'skincare'
+  const configuredBrandKey = script?.dataset.brandKey || ''
+  const shopDomain = script?.dataset.shopDomain || window.Shopify?.shop || ''
+  let brandKey = configuredBrandKey
+  let category = script?.dataset.category || 'skincare'
   const buttonText = script?.dataset.buttonText || 'Test Your Skin'
-  const accentColor = script?.dataset.accentColor || '#1B4332'
+  let accentColor = script?.dataset.accentColor || '#1B4332'
   const position = script?.dataset.position || 'bottom-right'
 
   // Builds a URL for the iframe-hosted AlphaMark widget with brand-specific settings.
@@ -78,6 +80,24 @@
     document.body.appendChild(button)
   }
 
+  // Resolves the installed Shopify shop to its AlphaMark brand config.
+  async function resolveShopBrandConfig() {
+    if (!shopDomain || (configuredBrandKey && configuredBrandKey !== 'test-api-key-001')) return
+
+    try {
+      const response = await fetch(`${apiUrl}/api/shopify/brand-config?shop=${encodeURIComponent(shopDomain)}`)
+      const data = await response.json()
+
+      if (!data.success) return
+
+      brandKey = data.brand_key || brandKey
+      category = data.brand_category || category
+      accentColor = data.primary_color || accentColor
+    } catch (error) {
+      console.warn('AlphaMark could not resolve Shopify brand config:', error)
+    }
+  }
+
   // Creates the full-screen overlay that will hold the AlphaMark iframe.
   function createOverlay() {
     const overlay = document.createElement('div')
@@ -118,7 +138,9 @@
   }
 
   // Boots the storefront integration once the document body is ready.
-  function init() {
+  async function init() {
+    await resolveShopBrandConfig()
+
     if (!brandKey) {
       console.warn('AlphaMark widget missing data-brand-key.')
     }
