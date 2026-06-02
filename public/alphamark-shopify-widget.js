@@ -25,10 +25,11 @@
     style.id = 'alphamark-shopify-widget-styles'
     style.textContent = `
       .alphamark-widget-button {
-        position: fixed;
+        position: fixed !important;
         ${position.includes('left') ? 'left: 22px;' : 'right: 22px;'}
         ${position.includes('top') ? 'top: 22px;' : 'bottom: 22px;'}
-        z-index: 2147483000;
+        z-index: 2147483000 !important;
+        transform: none !important;
         border: 0;
         border-radius: 999px;
         background: ${accentColor};
