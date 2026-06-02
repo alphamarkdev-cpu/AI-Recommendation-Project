@@ -75,6 +75,62 @@ const verifyShopifyHmac = query => {
 
 const shopSlug = shop => shop.replace('.myshopify.com', '').toLowerCase()
 
+const renderShopifyAppHome = (res, shop) => {
+  res
+    .type('html')
+    .send(`<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>AlphaMark AI Recommendation</title>
+    <style>
+      body {
+        margin: 0;
+        padding: 32px;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        color: #202223;
+        background: #f6f6f7;
+      }
+      .panel {
+        max-width: 760px;
+        background: #fff;
+        border: 1px solid #dfe3e8;
+        border-radius: 8px;
+        padding: 24px;
+      }
+      h1 { margin: 0 0 12px; font-size: 24px; }
+      p { margin: 8px 0; line-height: 1.5; }
+      code {
+        background: #f1f2f4;
+        border-radius: 4px;
+        padding: 2px 6px;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="panel">
+      <h1>AlphaMark AI Recommendation is connected</h1>
+      <p>Shop: <code>${shop}</code></p>
+      <p>Your storefront widget can now resolve this Shopify store to its AlphaMark brand configuration.</p>
+      <p>Next, keep the AlphaMark app embed enabled in the theme editor.</p>
+    </main>
+  </body>
+</html>`)
+}
+
+const getInstalledStore = async shop => {
+  const { data, error } = await supabase
+    .from('shopify_stores')
+    .select('shop_domain, brand_id')
+    .eq('shop_domain', shop)
+    .is('uninstalled_at', null)
+    .maybeSingle()
+
+  if (error) throw error
+  return data
+}
+
 const createBrandForShop = async shop => {
   const slug = shopSlug(shop)
   const apiKey = `shop_${crypto.randomBytes(18).toString('hex')}`
@@ -142,6 +198,11 @@ const startShopifyInstall = async (req, res) => {
       return res.status(400).send('A valid shop query parameter is required.')
     }
 
+    const installedStore = await getInstalledStore(shop)
+    if (installedStore) {
+      return renderShopifyAppHome(res, shop)
+    }
+
     const redirectUri = `${appUrl}/shopify/callback`
     const installUrl = new URL(`https://${shop}/admin/oauth/authorize`)
     installUrl.searchParams.set('client_id', apiKey)
@@ -195,7 +256,7 @@ const handleShopifyCallback = async (req, res) => {
 
     if (upsertError) throw upsertError
 
-    res.redirect(`https://${shop}/admin/apps/${apiKey}`)
+    res.redirect(`${shopifyConfig().appUrl}/shopify?shop=${encodeURIComponent(shop)}`)
   } catch (error) {
     console.error('Shopify callback error:', error.response?.data || error)
     res.status(500).send(error.message)
