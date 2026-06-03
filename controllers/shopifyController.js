@@ -651,12 +651,190 @@ const renderShopifyAppHome = (res, dashboard) => {
         gap: 16px;
         margin-bottom: 14px;
       }
+      .store-header {
+        display: grid;
+        grid-template-columns: auto minmax(260px, 560px) auto;
+        gap: 24px;
+        align-items: center;
+        padding-bottom: 18px;
+        border-bottom: 1px solid var(--line);
+      }
+      .store-brand {
+        display: inline-flex;
+        align-items: center;
+        gap: 12px;
+        font-weight: 850;
+        font-size: 18px;
+      }
+      .search-box {
+        min-height: 50px;
+        display: flex;
+        align-items: center;
+        padding: 0 18px;
+        border: 1px solid #d2d6dc;
+        border-radius: 999px;
+        color: #747980;
+        background: #fff;
+      }
+      .listing {
+        display: grid;
+        grid-template-columns: 300px minmax(0, 1fr);
+        gap: 46px;
+        padding-top: 28px;
+      }
+      .listing-sidebar {
+        position: sticky;
+        top: 18px;
+        align-self: start;
+      }
+      .app-card {
+        padding: 0;
+      }
+      .app-head {
+        display: grid;
+        grid-template-columns: 64px minmax(0, 1fr);
+        gap: 14px;
+        align-items: center;
+        padding-bottom: 26px;
+        border-bottom: 1px solid var(--line);
+      }
+      .app-logo-lg {
+        display: grid;
+        place-items: center;
+        width: 64px;
+        height: 64px;
+        border-radius: 8px;
+        color: #fff;
+        background: #123943;
+        font-weight: 900;
+        font-size: 22px;
+      }
+      .app-head h1 {
+        margin: 0;
+        font-size: 22px;
+        line-height: 1.18;
+      }
+      .info-block {
+        padding: 22px 0;
+        border-bottom: 1px solid var(--line);
+      }
+      .info-block:last-child {
+        border-bottom: 0;
+      }
+      .info-block span {
+        display: block;
+        margin-bottom: 8px;
+        color: var(--ink);
+        font-weight: 800;
+      }
+      .install-button {
+        width: 100%;
+        min-height: 58px;
+        margin: 8px 0 18px;
+        border-radius: 999px;
+        background: #111;
+        font-size: 18px;
+      }
+      .demo-link {
+        display: block;
+        color: #111;
+        text-align: center;
+        font-weight: 800;
+      }
+      .media-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 250px;
+        gap: 14px;
+      }
+      .media-main {
+        min-height: 456px;
+        padding: 28px;
+        border-radius: 8px;
+        background: #123943;
+      }
+      .media-collage {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 12px;
+        height: 100%;
+      }
+      .shot {
+        min-height: 128px;
+        padding: 16px;
+        border-radius: 8px;
+        background: #fff;
+        color: #162329;
+      }
+      .shot.wide {
+        grid-column: span 2;
+      }
+      .shot.tall {
+        grid-row: span 2;
+      }
+      .shot.brand-shot {
+        display: grid;
+        place-items: center;
+        background: #ff9b84;
+        color: #123943;
+        font-size: 42px;
+        font-weight: 900;
+      }
+      .shot.dark-shot {
+        background: #1c5560;
+        color: #fff;
+      }
+      .shot.accent-shot {
+        background: var(--accent);
+      }
+      .thumbs {
+        display: grid;
+        gap: 14px;
+      }
+      .thumb {
+        min-height: 138px;
+        padding: 14px;
+        border-radius: 8px;
+        background: #123943;
+        color: #fff;
+      }
+      .thumb.muted {
+        background: #e9ecef;
+        color: #596068;
+      }
+      .listing-title {
+        max-width: 940px;
+        margin: 28px 0 18px;
+        font-size: 25px;
+        line-height: 1.18;
+      }
+      .listing-copy {
+        max-width: 940px;
+        color: #4b5056;
+        font-size: 17px;
+      }
+      .feature-list {
+        display: grid;
+        gap: 10px;
+        max-width: 900px;
+        margin: 22px 0 0;
+        padding-left: 22px;
+        color: #353a40;
+        font-size: 16px;
+        line-height: 1.45;
+      }
+      .admin-tools {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 14px;
+        margin-top: 28px;
+      }
       @media (max-width: 800px) {
         main { padding: 18px; }
-        .topbar, .hero, .layout, .metrics, .two-col, .preview-grid { grid-template-columns: 1fr; }
+        .topbar, .hero, .layout, .metrics, .two-col, .preview-grid, .store-header, .listing, .media-grid, .media-collage, .admin-tools { grid-template-columns: 1fr; }
         .hero-copy { padding: 10px 0; }
         .preview { min-height: auto; }
-        .sidebar { position: static; }
+        .sidebar, .listing-sidebar { position: static; }
+        .media-main { min-height: auto; }
       }
     </style>
   </head>
@@ -666,106 +844,111 @@ const renderShopifyAppHome = (res, dashboard) => {
       ${synced ? `<div class="notice">${Number(synced)} Shopify products synced.</div>` : ''}
       ${syncError ? `<div class="notice error">${escapeHtml(syncError)}</div>` : ''}
 
-      <header class="topbar">
-        <div class="top-title">
-          <div class="brand-mark">AM</div>
-          <div>
-            <strong>AlphaMark AI Recommendation</strong>
-            <span>Personalized product advisor for Shopify brands</span>
-          </div>
+      <header class="store-header">
+        <div class="store-brand">
+          <div class="app-logo-lg">AM</div>
+          <span>AlphaMark App Store</span>
         </div>
+        <div class="search-box">Search apps, guides, and more</div>
         <span class="status">Connected</span>
       </header>
 
-      <section class="hero">
-        <div class="hero-copy">
-          <div class="eyebrow">Installed for ${escapeHtml(shop)}</div>
-          <h1>Turn shopper answers into AI product recommendations.</h1>
-          <p class="hero-lede">Sync Shopify products, generate a brand-specific question flow, and launch a storefront advisor that works for any product category.</p>
-          <div class="actions">
-            <a class="button brand" href="${escapeHtml(themeEditorUrl(shop))}" target="_top">Open theme editor</a>
-            <a class="button secondary" href="${escapeHtml(storefrontUrl(shop))}" target="_blank">View storefront</a>
-          </div>
-        </div>
+      <section class="listing">
+        <aside class="listing-sidebar">
+          <div class="app-card">
+            <div class="app-head">
+              <div class="app-logo-lg">AM</div>
+              <h1>AlphaMark AI Recommendations</h1>
+            </div>
 
-        <div class="preview" aria-hidden="true">
-          <div class="preview-grid">
-            <div class="preview-card">
-              <h3>Detailed analytics</h3>
-              <strong>${Number(productCount || 0)} products</strong>
-              <div class="spark"></div>
+            <div class="info-block">
+              <span>Pricing</span>
+              <p>Free to install for connected Shopify brands.</p>
             </div>
-            <div class="preview-card dark">
-              <h3>Brand flow</h3>
-              <strong>${escapeHtml(activeFlowLabel)}</strong>
-            </div>
-            <div class="preview-card feature">AlphaMark</div>
-            <div class="preview-card accent">
-              <h3>Storefront widget</h3>
-              <strong>Find my match</strong>
-            </div>
-          </div>
-        </div>
-      </section>
 
-      <section class="layout">
-        <aside class="sidebar">
-          <div class="side-card">
-            <div class="app-id">
-              <div class="brand-mark">AM</div>
-              <div>
-                <h2>${escapeHtml(brandName)}</h2>
-                <p style="margin-bottom: 0;">AI Recommendation</p>
-              </div>
+            <div class="info-block">
+              <span>Status</span>
+              <p><strong>Connected</strong> to <code>${escapeHtml(shop)}</code></p>
             </div>
-            <span class="status">Live connection</span>
-            <div class="side-list">
-              <div>
-                <span>Shop</span>
-                <code>${escapeHtml(shop)}</code>
-              </div>
-              <div>
-                <span>Brand category</span>
-                <strong>${escapeHtml(category)}</strong>
-              </div>
-              <div>
-                <span>Brand API key</span>
-                <code>${escapeHtml(maskKey(brand?.api_key))}</code>
-              </div>
-              <div>
-                <span>Installed</span>
-                <strong>${escapeHtml(installedAt || 'Connected')}</strong>
-              </div>
+
+            <div class="info-block">
+              <span>Brand</span>
+              <p>${escapeHtml(brandName)}</p>
+              <p><code>${escapeHtml(category)}</code></p>
+            </div>
+
+            <div class="info-block">
+              <a class="button install-button" href="${escapeHtml(themeEditorUrl(shop))}" target="_top">Open theme editor</a>
+              <a class="demo-link" href="${escapeHtml(storefrontUrl(shop))}" target="_blank">View storefront</a>
+            </div>
+
+            <div class="info-block">
+              <span>Brand API key</span>
+              <code>${escapeHtml(maskKey(brand?.api_key))}</code>
             </div>
           </div>
         </aside>
 
-        <div class="content">
-          <div class="metrics">
-            <div class="metric">
-              <strong>${Number(productCount || 0)}</strong>
-              <span>Products synced</span>
+        <div class="listing-main">
+          <div class="media-grid">
+            <div class="media-main">
+              <div class="media-collage">
+                <div class="shot wide">
+                  <h3>Detailed analytics</h3>
+                  <strong>${Number(productCount || 0)} synced products</strong>
+                  <div class="spark"></div>
+                </div>
+                <div class="shot dark-shot tall">
+                  <h3>AI advisor</h3>
+                  <p style="color: inherit;">Personalized quiz and photo-aware product matching.</p>
+                </div>
+                <div class="shot brand-shot">alphamark</div>
+                <div class="shot">
+                  <h3>Product matching</h3>
+                  <strong>${Number(flowCount || 0)} flows</strong>
+                </div>
+                <div class="shot accent-shot">
+                  <h3>Theme widget</h3>
+                  <strong>${escapeHtml(activeFlowLabel)}</strong>
+                </div>
+              </div>
             </div>
-            <div class="metric">
-              <strong>${Number(flowCount || 0)}</strong>
-              <span>Question flows</span>
-            </div>
-            <div class="metric">
-              <strong>${escapeHtml(activeFlowLabel)}</strong>
-              <span>Recommendation flow</span>
+
+            <div class="thumbs">
+              <div class="thumb">
+                <h3>Storefront advisor</h3>
+                <p style="color: inherit;">Floating entry point for shoppers.</p>
+              </div>
+              <div class="thumb">
+                <h3>Admin setup</h3>
+                <p style="color: inherit;">Sync catalog and customize brand settings.</p>
+              </div>
+              <div class="thumb muted">
+                <h3>+ more</h3>
+                <p style="color: inherit;">Question flows, product matching, AI analysis.</p>
+              </div>
             </div>
           </div>
 
-          <div class="two-col">
+          <h2 class="listing-title">Boost conversions by turning customer preferences into AI-generated product recommendations.</h2>
+          <p class="listing-copy">AlphaMark helps Shopify brands launch a guided product advisor that collects customer preferences, uses brand-specific questions, analyzes optional photos, and recommends the most relevant products from the synced Shopify catalog.</p>
+
+          <ul class="feature-list">
+            <li>Sync products from Shopify and use real catalog data in the recommendation engine.</li>
+            <li>Create flexible question flows for any brand category, not just skincare.</li>
+            <li>Launch a storefront widget through the Shopify theme editor.</li>
+            <li>Use AI analysis to combine text answers, optional photo signals, and product tags.</li>
+            <li>Keep setup simple for brands with an embedded Shopify admin dashboard.</li>
+          </ul>
+
+          <div class="admin-tools">
             <section class="panel">
-              <div class="section-title">
-                <h2>Shopify products</h2>
-              </div>
-              <p>Import this store's Shopify catalog into AlphaMark so the advisor can recommend real products from the brand.</p>
+              <h2>Shopify products</h2>
+              <p>Import this store's Shopify catalog into AlphaMark.</p>
               <form class="settings" method="post" action="/shopify/products/sync">
                 <input type="hidden" name="shop" value="${escapeHtml(shop)}">
                 <input type="hidden" name="token" value="${escapeHtml(syncToken)}">
-                <button class="button brand" type="submit">Sync Shopify products</button>
+                <button class="button brand" type="submit">Sync products</button>
               </form>
             </section>
 
@@ -785,25 +968,25 @@ const renderShopifyAppHome = (res, dashboard) => {
                 <button class="button secondary" type="submit">Save settings</button>
               </form>
             </section>
-          </div>
 
-          <section class="panel">
-            <h2>Launch checklist</h2>
-            <div class="steps">
-              <div class="step">
-                <span class="dot">1</span>
-                <p>Sync Shopify products so the recommendation engine has real catalog data.</p>
+            <section class="panel">
+              <h2>Launch checklist</h2>
+              <div class="steps">
+                <div class="step">
+                  <span class="dot">1</span>
+                  <p>Sync Shopify products.</p>
+                </div>
+                <div class="step">
+                  <span class="dot">2</span>
+                  <p>Verify the <code>${escapeHtml(category)}</code> question flow.</p>
+                </div>
+                <div class="step">
+                  <span class="dot">3</span>
+                  <p>Enable the theme app embed.</p>
+                </div>
               </div>
-              <div class="step">
-                <span class="dot">2</span>
-                <p>Generate or verify the question flow for <code>${escapeHtml(category)}</code>.</p>
-              </div>
-              <div class="step">
-                <span class="dot">3</span>
-                <p>Enable the AlphaMark app embed in the theme editor and test the storefront button.</p>
-              </div>
-            </div>
-          </section>
+            </section>
+          </div>
         </div>
       </section>
     </main>
