@@ -4,7 +4,7 @@
   const configuredBrandKey = script?.dataset.brandKey || ''
   const shopDomain = script?.dataset.shopDomain || window.Shopify?.shop || ''
   let brandKey = configuredBrandKey
-  let category = script?.dataset.category || 'skincare'
+  let category = script?.dataset.category || 'general'
   const buttonText = script?.dataset.buttonText || 'Test Your Skin'
   let accentColor = script?.dataset.accentColor || '#1B4332'
   const position = script?.dataset.position || 'bottom-right'

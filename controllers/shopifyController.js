@@ -138,8 +138,12 @@ const maskKey = key => {
 
 const themeEditorUrl = shop => `https://${shop}/admin/themes/current/editor?context=apps`
 const storefrontUrl = shop => `https://${shop}`
-const validBrandCategories = new Set(['skincare', 'haircare', 'supplements'])
 const isValidHexColor = value => /^#[0-9a-fA-F]{6}$/.test(value)
+const normalizeBrandCategory = value => String(value || 'general')
+  .trim()
+  .toLowerCase()
+  .replace(/\s+/g, ' ')
+  .slice(0, 80)
 
 const renderShopifyAppHome = (res, dashboard) => {
   const {
@@ -152,13 +156,10 @@ const renderShopifyAppHome = (res, dashboard) => {
     saved
   } = dashboard
 
-  const category = brand?.product_category || 'skincare'
+  const category = brand?.product_category || 'general'
   const color = brand?.primary_color || '#1B4332'
   const brandName = brand?.name || shopSlug(shop).replace(/-/g, ' ')
   const settingsToken = signShopToken(shop, 'settings')
-  const categoryOptions = ['skincare', 'haircare', 'supplements']
-    .map(option => `<option value="${option}" ${option === category ? 'selected' : ''}>${option}</option>`)
-    .join('')
 
   res
     .type('html')
@@ -293,9 +294,13 @@ const renderShopifyAppHome = (res, dashboard) => {
         font-weight: 650;
       }
       .field select,
+      .field input[type="text"],
       .field input[type="color"] {
         width: 100%;
         min-height: 38px;
+        border: 1px solid #babfc3;
+        border-radius: 6px;
+        padding: 7px 10px;
       }
       .field input[type="color"] {
         padding: 3px;
@@ -383,7 +388,7 @@ const renderShopifyAppHome = (res, dashboard) => {
             <input type="hidden" name="token" value="${escapeHtml(settingsToken)}">
             <div class="field">
               <label for="category">Brand category</label>
-              <select id="category" name="category">${categoryOptions}</select>
+              <input id="category" name="category" type="text" value="${escapeHtml(category)}" placeholder="fragrance, pet care, fitness">
             </div>
             <div class="field">
               <label for="primary_color">Widget color</label>
@@ -502,7 +507,7 @@ const createBrandForShop = async shop => {
       name: slug.replace(/-/g, ' '),
       slug,
       api_key: apiKey,
-      product_category: 'skincare',
+      product_category: 'general',
       primary_color: '#1B4332',
       is_active: true
     })
@@ -575,7 +580,7 @@ const updateShopifySettings = async (req, res) => {
     const { appUrl } = shopifyConfig()
     const shop = req.body.shop
     const token = req.body.token
-    const category = String(req.body.category || '').toLowerCase()
+    const category = normalizeBrandCategory(req.body.category)
     const primaryColor = req.body.primary_color || '#1B4332'
 
     if (!isValidShopDomain(shop)) {
@@ -586,8 +591,8 @@ const updateShopifySettings = async (req, res) => {
       return res.status(401).send('Invalid settings token.')
     }
 
-    if (!validBrandCategories.has(category)) {
-      return res.status(400).send('Invalid brand category.')
+    if (!category) {
+      return res.status(400).send('Brand category is required.')
     }
 
     if (!isValidHexColor(primaryColor)) {
@@ -686,7 +691,7 @@ const getShopBrandConfig = async (req, res) => {
       success: true,
       shop: data.shop_domain,
       brand_key: data.brands.api_key,
-      brand_category: data.brands.product_category || 'skincare',
+      brand_category: data.brands.product_category || 'general',
       primary_color: data.brands.primary_color || '#1B4332'
     })
   } catch (error) {
