@@ -8,11 +8,25 @@ const recommendRouter = require('./routes/recommend')
 const supabase = require('./config/supabase')
 const questionsRouter = require('./routes/questions')
 const shopifyRouter = require('./routes/shopify')
+const {
+  handleAppUninstalledWebhook,
+  handleAppScopesUpdateWebhook
+} = require('./controllers/shopifyController')
 const path = require('path')
 
 const app = express()
 
 app.use(cors())
+app.post(
+  '/webhooks/app/uninstalled',
+  express.raw({ type: 'application/json' }),
+  handleAppUninstalledWebhook
+)
+app.post(
+  '/webhooks/app/scopes_update',
+  express.raw({ type: 'application/json' }),
+  handleAppScopesUpdateWebhook
+)
 app.use(express.json({ limit: '10mb' }))
 
 app.use('/api/brands', brandsRouter)

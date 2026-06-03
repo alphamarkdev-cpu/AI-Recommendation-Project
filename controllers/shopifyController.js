@@ -75,7 +75,36 @@ const verifyShopifyHmac = query => {
 
 const shopSlug = shop => shop.replace('.myshopify.com', '').toLowerCase()
 
-const renderShopifyAppHome = (res, shop) => {
+const escapeHtml = value => String(value ?? '')
+  .replace(/&/g, '&amp;')
+  .replace(/</g, '&lt;')
+  .replace(/>/g, '&gt;')
+  .replace(/"/g, '&quot;')
+  .replace(/'/g, '&#39;')
+
+const maskKey = key => {
+  if (!key) return 'Not configured'
+  if (key.length <= 12) return key
+  return `${key.slice(0, 8)}...${key.slice(-4)}`
+}
+
+const themeEditorUrl = shop => `https://${shop}/admin/themes/current/editor?context=apps`
+const storefrontUrl = shop => `https://${shop}`
+
+const renderShopifyAppHome = (res, dashboard) => {
+  const {
+    shop,
+    brand,
+    productCount,
+    flowCount,
+    activeFlow,
+    installedAt
+  } = dashboard
+
+  const category = brand?.product_category || 'skincare'
+  const color = brand?.primary_color || '#1B4332'
+  const brandName = brand?.name || shopSlug(shop).replace(/-/g, ' ')
+
   res
     .type('html')
     .send(`<!doctype html>
@@ -85,35 +114,201 @@ const renderShopifyAppHome = (res, shop) => {
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>AlphaMark AI Recommendation</title>
     <style>
+      * { box-sizing: border-box; }
       body {
         margin: 0;
-        padding: 32px;
+        padding: 28px;
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
         color: #202223;
         background: #f6f6f7;
       }
-      .panel {
-        max-width: 760px;
+      main { max-width: 1120px; }
+      .eyebrow {
+        color: #5c5f62;
+        font-size: 13px;
+        margin-bottom: 8px;
+      }
+      h1 {
+        margin: 0 0 20px;
+        font-size: 28px;
+        letter-spacing: 0;
+      }
+      h2 {
+        margin: 0 0 12px;
+        font-size: 16px;
+        letter-spacing: 0;
+      }
+      p { margin: 8px 0; line-height: 1.5; color: #4d5358; }
+      .grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1.35fr) minmax(280px, .65fr);
+        gap: 16px;
+      }
+      .panel, .metric {
         background: #fff;
         border: 1px solid #dfe3e8;
         border-radius: 8px;
-        padding: 24px;
+        padding: 20px;
       }
-      h1 { margin: 0 0 12px; font-size: 24px; }
-      p { margin: 8px 0; line-height: 1.5; }
+      .metrics {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 12px;
+        margin: 16px 0;
+      }
+      .metric strong {
+        display: block;
+        font-size: 24px;
+        margin-bottom: 4px;
+      }
+      .metric span { color: #6d7175; font-size: 13px; }
+      .status {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        border-radius: 999px;
+        padding: 5px 10px;
+        color: #0a6b45;
+        background: #d1f7e5;
+        font-weight: 650;
+        font-size: 13px;
+      }
+      .rows { margin-top: 16px; border-top: 1px solid #ebedf0; }
+      .row {
+        display: grid;
+        grid-template-columns: 170px minmax(0, 1fr);
+        gap: 16px;
+        padding: 12px 0;
+        border-bottom: 1px solid #ebedf0;
+      }
+      .label { color: #6d7175; }
       code {
         background: #f1f2f4;
         border-radius: 4px;
         padding: 2px 6px;
+        word-break: break-word;
+      }
+      .actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-top: 16px;
+      }
+      .button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 38px;
+        padding: 0 14px;
+        border-radius: 6px;
+        color: #fff;
+        background: #1f6f50;
+        text-decoration: none;
+        font-weight: 650;
+      }
+      .button.secondary {
+        color: #202223;
+        background: #fff;
+        border: 1px solid #babfc3;
+      }
+      .steps {
+        display: grid;
+        gap: 10px;
+        margin-top: 12px;
+      }
+      .step {
+        display: grid;
+        grid-template-columns: 22px minmax(0, 1fr);
+        gap: 10px;
+        align-items: start;
+      }
+      .dot {
+        width: 22px;
+        height: 22px;
+        border-radius: 999px;
+        display: inline-grid;
+        place-items: center;
+        color: #fff;
+        background: ${escapeHtml(color)};
+        font-size: 12px;
+        font-weight: 700;
+      }
+      @media (max-width: 800px) {
+        body { padding: 18px; }
+        .grid, .metrics { grid-template-columns: 1fr; }
+        .row { grid-template-columns: 1fr; gap: 4px; }
       }
     </style>
   </head>
   <body>
-    <main class="panel">
-      <h1>AlphaMark AI Recommendation is connected</h1>
-      <p>Shop: <code>${shop}</code></p>
-      <p>Your storefront widget can now resolve this Shopify store to its AlphaMark brand configuration.</p>
-      <p>Next, keep the AlphaMark app embed enabled in the theme editor.</p>
+    <main>
+      <div class="eyebrow">Shopify app</div>
+      <h1>AlphaMark AI Recommendation</h1>
+
+      <section class="grid">
+        <div class="panel">
+          <span class="status">Connected</span>
+          <h2 style="margin-top: 16px;">${escapeHtml(brandName)}</h2>
+          <p>Your storefront widget can resolve this Shopify store to its AlphaMark brand configuration.</p>
+
+          <div class="metrics">
+            <div class="metric">
+              <strong>${Number(productCount || 0)}</strong>
+              <span>Products synced in AlphaMark</span>
+            </div>
+            <div class="metric">
+              <strong>${Number(flowCount || 0)}</strong>
+              <span>Question flows</span>
+            </div>
+            <div class="metric">
+              <strong>${activeFlow ? 'Yes' : 'No'}</strong>
+              <span>Active flow</span>
+            </div>
+          </div>
+
+          <div class="rows">
+            <div class="row">
+              <div class="label">Shop</div>
+              <div><code>${escapeHtml(shop)}</code></div>
+            </div>
+            <div class="row">
+              <div class="label">Brand category</div>
+              <div>${escapeHtml(category)}</div>
+            </div>
+            <div class="row">
+              <div class="label">Brand API key</div>
+              <div><code>${escapeHtml(maskKey(brand?.api_key))}</code></div>
+            </div>
+            <div class="row">
+              <div class="label">Installed</div>
+              <div>${escapeHtml(installedAt || 'Connected')}</div>
+            </div>
+          </div>
+
+          <div class="actions">
+            <a class="button" href="${escapeHtml(themeEditorUrl(shop))}" target="_top">Open theme editor</a>
+            <a class="button secondary" href="${escapeHtml(storefrontUrl(shop))}" target="_blank">View storefront</a>
+          </div>
+        </div>
+
+        <aside class="panel">
+          <h2>Setup checklist</h2>
+          <div class="steps">
+            <div class="step">
+              <span class="dot">1</span>
+              <p>Keep the AlphaMark app embed enabled in the theme editor.</p>
+            </div>
+            <div class="step">
+              <span class="dot">2</span>
+              <p>Generate or verify the question flow for <code>${escapeHtml(category)}</code>.</p>
+            </div>
+            <div class="step">
+              <span class="dot">3</span>
+              <p>Test the floating storefront button and complete one recommendation flow.</p>
+            </div>
+          </div>
+        </aside>
+      </section>
     </main>
   </body>
 </html>`)
@@ -122,13 +317,68 @@ const renderShopifyAppHome = (res, shop) => {
 const getInstalledStore = async shop => {
   const { data, error } = await supabase
     .from('shopify_stores')
-    .select('shop_domain, brand_id')
+    .select('shop_domain, brand_id, installed_at')
     .eq('shop_domain', shop)
     .is('uninstalled_at', null)
     .maybeSingle()
 
   if (error) throw error
   return data
+}
+
+const getShopDashboard = async shop => {
+  const { data: store, error: storeError } = await supabase
+    .from('shopify_stores')
+    .select(`
+      shop_domain,
+      installed_at,
+      brands(brand_id, name, slug, api_key, product_category, primary_color)
+    `)
+    .eq('shop_domain', shop)
+    .is('uninstalled_at', null)
+    .maybeSingle()
+
+  if (storeError) throw storeError
+  if (!store?.brands) return null
+
+  const brandId = store.brands.brand_id
+
+  const [
+    { count: productCount, error: productCountError },
+    { count: flowCount, error: flowCountError },
+    { data: activeFlow, error: activeFlowError }
+  ] = await Promise.all([
+    supabase
+      .from('products')
+      .select('product_id', { count: 'exact', head: true })
+      .eq('brand_id', brandId),
+    supabase
+      .from('brand_question_flows')
+      .select('flow_id', { count: 'exact', head: true })
+      .eq('brand_id', brandId),
+    supabase
+      .from('brand_question_flows')
+      .select('flow_id')
+      .eq('brand_id', brandId)
+      .eq('is_active', true)
+      .limit(1)
+      .maybeSingle()
+  ])
+
+  if (productCountError) throw productCountError
+  if (flowCountError) throw flowCountError
+  if (activeFlowError) throw activeFlowError
+
+  return {
+    shop,
+    brand: store.brands,
+    productCount,
+    flowCount,
+    activeFlow: Boolean(activeFlow),
+    installedAt: store.installed_at
+      ? new Date(store.installed_at).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })
+      : null
+  }
 }
 
 const createBrandForShop = async shop => {
@@ -200,7 +450,8 @@ const startShopifyInstall = async (req, res) => {
 
     const installedStore = await getInstalledStore(shop)
     if (installedStore) {
-      return renderShopifyAppHome(res, shop)
+      const dashboard = await getShopDashboard(shop)
+      return renderShopifyAppHome(res, dashboard || { shop })
     }
 
     const redirectUri = `${appUrl}/shopify/callback`
@@ -296,6 +547,67 @@ const getShopBrandConfig = async (req, res) => {
   }
 }
 
+const verifyShopifyWebhook = req => {
+  const { apiSecret } = shopifyConfig()
+  const hmac = req.get('x-shopify-hmac-sha256')
+
+  if (!apiSecret || !hmac || !Buffer.isBuffer(req.body)) return false
+
+  const digest = crypto
+    .createHmac('sha256', apiSecret)
+    .update(req.body)
+    .digest('base64')
+
+  const digestBuffer = Buffer.from(digest)
+  const hmacBuffer = Buffer.from(hmac)
+
+  return digestBuffer.length === hmacBuffer.length &&
+    crypto.timingSafeEqual(digestBuffer, hmacBuffer)
+}
+
+const handleAppUninstalledWebhook = async (req, res) => {
+  try {
+    if (!verifyShopifyWebhook(req)) {
+      return res.status(401).send('Invalid Shopify webhook signature.')
+    }
+
+    const payload = JSON.parse(req.body.toString('utf8'))
+    const shop = payload.myshopify_domain || payload.domain
+
+    if (!isValidShopDomain(shop)) {
+      return res.status(400).send('Invalid shop domain.')
+    }
+
+    const { error } = await supabase
+      .from('shopify_stores')
+      .update({
+        access_token: null,
+        uninstalled_at: new Date().toISOString()
+      })
+      .eq('shop_domain', shop)
+
+    if (error) throw error
+
+    res.status(200).send('OK')
+  } catch (error) {
+    console.error('Shopify uninstall webhook error:', error)
+    res.status(500).send(error.message)
+  }
+}
+
+const handleAppScopesUpdateWebhook = async (req, res) => {
+  try {
+    if (!verifyShopifyWebhook(req)) {
+      return res.status(401).send('Invalid Shopify webhook signature.')
+    }
+
+    res.status(200).send('OK')
+  } catch (error) {
+    console.error('Shopify scopes update webhook error:', error)
+    res.status(500).send(error.message)
+  }
+}
+
 const shopifyHealth = (req, res) => {
   res.send('AlphaMark Shopify app is running.')
 }
@@ -304,5 +616,7 @@ module.exports = {
   startShopifyInstall,
   handleShopifyCallback,
   getShopBrandConfig,
+  handleAppUninstalledWebhook,
+  handleAppScopesUpdateWebhook,
   shopifyHealth
 }
