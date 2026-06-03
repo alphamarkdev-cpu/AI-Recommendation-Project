@@ -315,6 +315,7 @@ const renderShopifyAppHome = (res, dashboard) => {
   const brandName = brand?.name || shopSlug(shop).replace(/-/g, ' ')
   const settingsToken = signShopToken(shop, 'settings')
   const syncToken = signShopToken(shop, 'sync_products')
+  const activeFlowLabel = activeFlow ? 'Ready' : 'Needed'
 
   res
     .type('html')
@@ -326,141 +327,302 @@ const renderShopifyAppHome = (res, dashboard) => {
     <title>AlphaMark AI Recommendation</title>
     <style>
       * { box-sizing: border-box; }
+      :root {
+        --brand: ${escapeHtml(color)};
+        --ink: #101112;
+        --muted: #61666d;
+        --line: #e2e5e9;
+        --surface: #ffffff;
+        --soft: #f6f7f8;
+        --accent: #d9ff57;
+      }
       body {
         margin: 0;
-        padding: 28px;
+        padding: 0;
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-        color: #202223;
-        background: #f6f6f7;
+        color: var(--ink);
+        background: #fff;
       }
-      main { max-width: 1120px; }
-      .eyebrow {
-        color: #5c5f62;
-        font-size: 13px;
-        margin-bottom: 8px;
+      main {
+        max-width: 1240px;
+        margin: 0 auto;
+        padding: 28px;
+      }
+      h1, h2, h3, p { margin-top: 0; }
+      h1, h2, h3 {
+        letter-spacing: 0;
       }
       h1 {
-        margin: 0 0 20px;
-        font-size: 28px;
-        letter-spacing: 0;
+        margin-bottom: 14px;
+        max-width: 760px;
+        font-size: clamp(34px, 5vw, 58px);
+        line-height: 1.02;
       }
       h2 {
-        margin: 0 0 12px;
-        font-size: 16px;
-        letter-spacing: 0;
+        margin-bottom: 12px;
+        font-size: 20px;
       }
-      p { margin: 8px 0; line-height: 1.5; color: #4d5358; }
-      .grid {
+      h3 {
+        margin-bottom: 8px;
+        font-size: 15px;
+      }
+      p {
+        margin-bottom: 12px;
+        color: var(--muted);
+        line-height: 1.5;
+      }
+      code {
+        display: inline-block;
+        max-width: 100%;
+        padding: 3px 7px;
+        border-radius: 5px;
+        background: #f0f1f2;
+        word-break: break-word;
+      }
+      .topbar {
         display: grid;
-        grid-template-columns: minmax(0, 1.35fr) minmax(280px, .65fr);
+        grid-template-columns: 1fr auto;
         gap: 16px;
+        align-items: center;
+        padding-bottom: 22px;
+        border-bottom: 1px solid var(--line);
       }
-      .panel, .metric {
-        background: #fff;
-        border: 1px solid #dfe3e8;
-        border-radius: 8px;
-        padding: 20px;
+      .brand-mark {
+        display: inline-grid;
+        place-items: center;
+        width: 48px;
+        height: 48px;
+        border-radius: 12px;
+        color: #fff;
+        background: var(--brand);
+        font-weight: 800;
       }
-      .metrics {
-        display: grid;
-        grid-template-columns: repeat(3, minmax(0, 1fr));
+      .top-title {
+        display: flex;
         gap: 12px;
-        margin: 16px 0;
+        align-items: center;
       }
-      .metric strong {
+      .top-title strong {
         display: block;
-        font-size: 24px;
-        margin-bottom: 4px;
+        font-size: 18px;
       }
-      .metric span { color: #6d7175; font-size: 13px; }
-      .status {
+      .top-title span {
+        color: var(--muted);
+        font-size: 13px;
+      }
+      .hero {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(360px, .82fr);
+        gap: 28px;
+        align-items: stretch;
+        padding: 34px 0 24px;
+      }
+      .hero-copy {
+        padding: 28px 0;
+      }
+      .eyebrow {
         display: inline-flex;
         align-items: center;
-        gap: 6px;
+        min-height: 28px;
+        margin-bottom: 18px;
+        padding: 0 11px;
+        border: 1px solid var(--line);
         border-radius: 999px;
-        padding: 5px 10px;
-        color: #0a6b45;
-        background: #d1f7e5;
-        font-weight: 650;
+        color: var(--ink);
+        background: var(--surface);
         font-size: 13px;
+        font-weight: 700;
+      }
+      .hero-lede {
+        max-width: 660px;
+        color: #41464c;
+        font-size: 18px;
+      }
+      .actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 16px;
+        margin-top: 22px;
+      }
+      .button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 46px;
+        padding: 0 20px;
+        border: 0;
+        border-radius: 999px;
+        color: #fff;
+        background: #111;
+        text-decoration: none;
+        font-weight: 750;
+        cursor: pointer;
+      }
+      .button.secondary {
+        color: var(--ink);
+        background: #fff;
+        border: 1px solid #bfc5cc;
+      }
+      .button.brand {
+        background: var(--brand);
+      }
+      .preview {
+        min-height: 390px;
+        padding: 22px;
+        border-radius: 8px;
+        background: #123943;
+        color: #fff;
+        overflow: hidden;
+      }
+      .preview-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 12px;
+        height: 100%;
+      }
+      .preview-card {
+        min-height: 112px;
+        padding: 16px;
+        border-radius: 8px;
+        background: #fff;
+        color: #182026;
+      }
+      .preview-card.feature {
+        display: grid;
+        place-items: center;
+        min-height: 150px;
+        background: #ff9b84;
+        font-size: 34px;
+        font-weight: 850;
+      }
+      .preview-card.dark {
+        background: #1a4e58;
+        color: #fff;
+      }
+      .preview-card.accent {
+        background: var(--accent);
+      }
+      .spark {
+        height: 48px;
+        margin-top: 12px;
+        border-radius: 8px;
+        background:
+          linear-gradient(135deg, transparent 10%, rgba(31,111,80,.18) 11% 18%, transparent 19%),
+          linear-gradient(90deg, #eef2ff, #f7e9ff);
       }
       .notice {
         margin-bottom: 16px;
         padding: 12px 14px;
+        border: 1px solid #9de4bd;
         border-radius: 8px;
         color: #0a6b45;
         background: #d1f7e5;
-        border: 1px solid #9de4bd;
-        font-weight: 650;
+        font-weight: 700;
       }
       .notice.error {
         color: #8a6116;
         background: #fff4d6;
         border-color: #ffd98d;
       }
-      .rows { margin-top: 16px; border-top: 1px solid #ebedf0; }
-      .row {
+      .layout {
         display: grid;
-        grid-template-columns: 170px minmax(0, 1fr);
-        gap: 16px;
-        padding: 12px 0;
-        border-bottom: 1px solid #ebedf0;
+        grid-template-columns: 300px minmax(0, 1fr);
+        gap: 28px;
+        align-items: start;
       }
-      .label { color: #6d7175; }
-      code {
-        background: #f1f2f4;
-        border-radius: 4px;
-        padding: 2px 6px;
-        word-break: break-word;
+      .sidebar {
+        position: sticky;
+        top: 18px;
       }
-      .actions {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 10px;
-        margin-top: 16px;
+      .side-card, .panel, .metric {
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--surface);
       }
-      .button {
+      .side-card {
+        padding: 20px;
+      }
+      .app-id {
         display: inline-flex;
         align-items: center;
-        justify-content: center;
-        min-height: 38px;
-        padding: 0 14px;
-        border-radius: 6px;
-        color: #fff;
-        background: #1f6f50;
-        text-decoration: none;
+        gap: 12px;
+        margin-bottom: 22px;
+      }
+      .status {
+        display: inline-flex;
+        align-items: center;
+        border-radius: 999px;
+        padding: 5px 10px;
+        color: #0a6b45;
+        background: #d1f7e5;
+        font-weight: 750;
+        font-size: 13px;
+      }
+      .side-list {
+        display: grid;
+        gap: 16px;
+        margin-top: 18px;
+        padding-top: 18px;
+        border-top: 1px solid var(--line);
+      }
+      .side-list span {
+        display: block;
+        color: var(--muted);
+        font-size: 13px;
+        margin-bottom: 4px;
+      }
+      .content {
+        display: grid;
+        gap: 18px;
+      }
+      .metrics {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 14px;
+      }
+      .metric {
+        padding: 20px;
+      }
+      .metric strong {
+        display: block;
+        margin-bottom: 6px;
+        font-size: 30px;
+      }
+      .metric span {
+        color: var(--muted);
+        font-size: 13px;
         font-weight: 650;
       }
-      .button.secondary {
-        color: #202223;
-        background: #fff;
-        border: 1px solid #babfc3;
+      .panel {
+        padding: 22px;
+      }
+      .two-col {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(280px, .82fr);
+        gap: 18px;
       }
       .steps {
         display: grid;
-        gap: 10px;
-        margin-top: 12px;
+        gap: 12px;
       }
       .settings {
         display: grid;
         gap: 14px;
-        margin-top: 16px;
       }
       .field {
         display: grid;
-        gap: 6px;
+        gap: 7px;
       }
       .field label {
-        font-weight: 650;
+        font-weight: 750;
       }
-      .field select,
       .field input[type="text"],
       .field input[type="color"] {
         width: 100%;
-        min-height: 38px;
-        border: 1px solid #babfc3;
+        min-height: 42px;
+        border: 1px solid #bfc5cc;
         border-radius: 6px;
-        padding: 7px 10px;
+        padding: 8px 10px;
       }
       .field input[type="color"] {
         padding: 3px;
@@ -478,115 +640,171 @@ const renderShopifyAppHome = (res, dashboard) => {
         display: inline-grid;
         place-items: center;
         color: #fff;
-        background: ${escapeHtml(color)};
+        background: var(--brand);
         font-size: 12px;
         font-weight: 700;
       }
+      .section-title {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        margin-bottom: 14px;
+      }
       @media (max-width: 800px) {
-        body { padding: 18px; }
-        .grid, .metrics { grid-template-columns: 1fr; }
-        .row { grid-template-columns: 1fr; gap: 4px; }
+        main { padding: 18px; }
+        .topbar, .hero, .layout, .metrics, .two-col, .preview-grid { grid-template-columns: 1fr; }
+        .hero-copy { padding: 10px 0; }
+        .preview { min-height: auto; }
+        .sidebar { position: static; }
       }
     </style>
   </head>
   <body>
     <main>
-      <div class="eyebrow">Shopify app</div>
-      <h1>AlphaMark AI Recommendation</h1>
       ${saved ? '<div class="notice">Settings saved.</div>' : ''}
       ${synced ? `<div class="notice">${Number(synced)} Shopify products synced.</div>` : ''}
       ${syncError ? `<div class="notice error">${escapeHtml(syncError)}</div>` : ''}
 
-      <section class="grid">
-        <div class="panel">
-          <span class="status">Connected</span>
-          <h2 style="margin-top: 16px;">${escapeHtml(brandName)}</h2>
-          <p>Your storefront widget can resolve this Shopify store to its AlphaMark brand configuration.</p>
+      <header class="topbar">
+        <div class="top-title">
+          <div class="brand-mark">AM</div>
+          <div>
+            <strong>AlphaMark AI Recommendation</strong>
+            <span>Personalized product advisor for Shopify brands</span>
+          </div>
+        </div>
+        <span class="status">Connected</span>
+      </header>
 
+      <section class="hero">
+        <div class="hero-copy">
+          <div class="eyebrow">Installed for ${escapeHtml(shop)}</div>
+          <h1>Turn shopper answers into AI product recommendations.</h1>
+          <p class="hero-lede">Sync Shopify products, generate a brand-specific question flow, and launch a storefront advisor that works for any product category.</p>
+          <div class="actions">
+            <a class="button brand" href="${escapeHtml(themeEditorUrl(shop))}" target="_top">Open theme editor</a>
+            <a class="button secondary" href="${escapeHtml(storefrontUrl(shop))}" target="_blank">View storefront</a>
+          </div>
+        </div>
+
+        <div class="preview" aria-hidden="true">
+          <div class="preview-grid">
+            <div class="preview-card">
+              <h3>Detailed analytics</h3>
+              <strong>${Number(productCount || 0)} products</strong>
+              <div class="spark"></div>
+            </div>
+            <div class="preview-card dark">
+              <h3>Brand flow</h3>
+              <strong>${escapeHtml(activeFlowLabel)}</strong>
+            </div>
+            <div class="preview-card feature">AlphaMark</div>
+            <div class="preview-card accent">
+              <h3>Storefront widget</h3>
+              <strong>Find my match</strong>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="layout">
+        <aside class="sidebar">
+          <div class="side-card">
+            <div class="app-id">
+              <div class="brand-mark">AM</div>
+              <div>
+                <h2>${escapeHtml(brandName)}</h2>
+                <p style="margin-bottom: 0;">AI Recommendation</p>
+              </div>
+            </div>
+            <span class="status">Live connection</span>
+            <div class="side-list">
+              <div>
+                <span>Shop</span>
+                <code>${escapeHtml(shop)}</code>
+              </div>
+              <div>
+                <span>Brand category</span>
+                <strong>${escapeHtml(category)}</strong>
+              </div>
+              <div>
+                <span>Brand API key</span>
+                <code>${escapeHtml(maskKey(brand?.api_key))}</code>
+              </div>
+              <div>
+                <span>Installed</span>
+                <strong>${escapeHtml(installedAt || 'Connected')}</strong>
+              </div>
+            </div>
+          </div>
+        </aside>
+
+        <div class="content">
           <div class="metrics">
             <div class="metric">
               <strong>${Number(productCount || 0)}</strong>
-              <span>Products synced in AlphaMark</span>
+              <span>Products synced</span>
             </div>
             <div class="metric">
               <strong>${Number(flowCount || 0)}</strong>
               <span>Question flows</span>
             </div>
             <div class="metric">
-              <strong>${activeFlow ? 'Yes' : 'No'}</strong>
-              <span>Active flow</span>
+              <strong>${escapeHtml(activeFlowLabel)}</strong>
+              <span>Recommendation flow</span>
             </div>
           </div>
 
-          <div class="rows">
-            <div class="row">
-              <div class="label">Shop</div>
-              <div><code>${escapeHtml(shop)}</code></div>
-            </div>
-            <div class="row">
-              <div class="label">Brand category</div>
-              <div>${escapeHtml(category)}</div>
-            </div>
-            <div class="row">
-              <div class="label">Brand API key</div>
-              <div><code>${escapeHtml(maskKey(brand?.api_key))}</code></div>
-            </div>
-            <div class="row">
-              <div class="label">Installed</div>
-              <div>${escapeHtml(installedAt || 'Connected')}</div>
-            </div>
+          <div class="two-col">
+            <section class="panel">
+              <div class="section-title">
+                <h2>Shopify products</h2>
+              </div>
+              <p>Import this store's Shopify catalog into AlphaMark so the advisor can recommend real products from the brand.</p>
+              <form class="settings" method="post" action="/shopify/products/sync">
+                <input type="hidden" name="shop" value="${escapeHtml(shop)}">
+                <input type="hidden" name="token" value="${escapeHtml(syncToken)}">
+                <button class="button brand" type="submit">Sync Shopify products</button>
+              </form>
+            </section>
+
+            <section class="panel">
+              <h2>Brand settings</h2>
+              <form class="settings" method="post" action="/shopify/settings">
+                <input type="hidden" name="shop" value="${escapeHtml(shop)}">
+                <input type="hidden" name="token" value="${escapeHtml(settingsToken)}">
+                <div class="field">
+                  <label for="category">Brand category</label>
+                  <input id="category" name="category" type="text" value="${escapeHtml(category)}" placeholder="fragrance, pet care, fitness">
+                </div>
+                <div class="field">
+                  <label for="primary_color">Widget color</label>
+                  <input id="primary_color" name="primary_color" type="color" value="${escapeHtml(color)}">
+                </div>
+                <button class="button secondary" type="submit">Save settings</button>
+              </form>
+            </section>
           </div>
 
-          <div class="actions">
-            <a class="button" href="${escapeHtml(themeEditorUrl(shop))}" target="_top">Open theme editor</a>
-            <a class="button secondary" href="${escapeHtml(storefrontUrl(shop))}" target="_blank">View storefront</a>
-          </div>
+          <section class="panel">
+            <h2>Launch checklist</h2>
+            <div class="steps">
+              <div class="step">
+                <span class="dot">1</span>
+                <p>Sync Shopify products so the recommendation engine has real catalog data.</p>
+              </div>
+              <div class="step">
+                <span class="dot">2</span>
+                <p>Generate or verify the question flow for <code>${escapeHtml(category)}</code>.</p>
+              </div>
+              <div class="step">
+                <span class="dot">3</span>
+                <p>Enable the AlphaMark app embed in the theme editor and test the storefront button.</p>
+              </div>
+            </div>
+          </section>
         </div>
-
-        <aside class="panel">
-          <h2>Brand settings</h2>
-          <form class="settings" method="post" action="/shopify/settings">
-            <input type="hidden" name="shop" value="${escapeHtml(shop)}">
-            <input type="hidden" name="token" value="${escapeHtml(settingsToken)}">
-            <div class="field">
-              <label for="category">Brand category</label>
-              <input id="category" name="category" type="text" value="${escapeHtml(category)}" placeholder="fragrance, pet care, fitness">
-            </div>
-            <div class="field">
-              <label for="primary_color">Widget color</label>
-              <input id="primary_color" name="primary_color" type="color" value="${escapeHtml(color)}">
-            </div>
-            <button class="button" type="submit">Save settings</button>
-          </form>
-        </aside>
-
-        <aside class="panel">
-          <h2>Shopify products</h2>
-          <p>Import this store's active Shopify catalog into AlphaMark so recommendations can use real product data.</p>
-          <form class="settings" method="post" action="/shopify/products/sync">
-            <input type="hidden" name="shop" value="${escapeHtml(shop)}">
-            <input type="hidden" name="token" value="${escapeHtml(syncToken)}">
-            <button class="button" type="submit">Sync Shopify products</button>
-          </form>
-        </aside>
-
-        <aside class="panel">
-          <h2>Setup checklist</h2>
-          <div class="steps">
-            <div class="step">
-              <span class="dot">1</span>
-              <p>Keep the AlphaMark app embed enabled in the theme editor.</p>
-            </div>
-            <div class="step">
-              <span class="dot">2</span>
-              <p>Generate or verify the question flow for <code>${escapeHtml(category)}</code>.</p>
-            </div>
-            <div class="step">
-              <span class="dot">3</span>
-              <p>Test the floating storefront button and complete one recommendation flow.</p>
-            </div>
-          </div>
-        </aside>
       </section>
     </main>
   </body>
