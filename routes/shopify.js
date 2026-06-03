@@ -1,6 +1,7 @@
 const express = require('express')
 const {
   startShopifyInstall,
+  updateShopifySettings,
   handleShopifyCallback,
   getShopBrandConfig,
   shopifyHealth
@@ -10,6 +11,8 @@ const router = express.Router()
 
 // Starts Shopify OAuth installation.
 router.get('/', startShopifyInstall)
+// Saves brand-level Shopify app settings from the embedded admin dashboard.
+router.post('/settings', express.urlencoded({ extended: false }), updateShopifySettings)
 // Receives Shopify OAuth callback and stores the shop access token.
 router.get('/callback', handleShopifyCallback)
 // Simple browser-readable health page for app URL checks.

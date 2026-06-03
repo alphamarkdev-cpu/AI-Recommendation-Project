@@ -32,6 +32,54 @@ const signState = shop => {
   return `${encoded}.${signature}`
 }
 
+const signShopToken = (shop, purpose) => {
+  const { apiSecret } = shopifyConfig()
+  const payload = JSON.stringify({
+    shop,
+    purpose,
+    ts: Date.now()
+  })
+  const encoded = Buffer.from(payload).toString('base64url')
+  const signature = crypto
+    .createHmac('sha256', apiSecret)
+    .update(encoded)
+    .digest('hex')
+
+  return `${encoded}.${signature}`
+}
+
+const verifyShopToken = (token, shop, purpose, maxAgeMs = 24 * 60 * 60 * 1000) => {
+  const { apiSecret } = shopifyConfig()
+  if (!token || !token.includes('.')) return false
+
+  const [encoded, signature] = token.split('.')
+  const expected = crypto
+    .createHmac('sha256', apiSecret)
+    .update(encoded)
+    .digest('hex')
+
+  const signatureBuffer = Buffer.from(signature || '')
+  const expectedBuffer = Buffer.from(expected)
+
+  if (
+    signatureBuffer.length !== expectedBuffer.length ||
+    !crypto.timingSafeEqual(signatureBuffer, expectedBuffer)
+  ) {
+    return false
+  }
+
+  try {
+    const payload = JSON.parse(Buffer.from(encoded, 'base64url').toString('utf8'))
+    const ageMs = Date.now() - payload.ts
+    return payload.shop === shop &&
+      payload.purpose === purpose &&
+      ageMs >= 0 &&
+      ageMs < maxAgeMs
+  } catch (error) {
+    return false
+  }
+}
+
 const verifyState = (state, shop) => {
   const { apiSecret } = shopifyConfig()
   if (!state || !state.includes('.')) return false
@@ -90,6 +138,8 @@ const maskKey = key => {
 
 const themeEditorUrl = shop => `https://${shop}/admin/themes/current/editor?context=apps`
 const storefrontUrl = shop => `https://${shop}`
+const validBrandCategories = new Set(['skincare', 'haircare', 'supplements'])
+const isValidHexColor = value => /^#[0-9a-fA-F]{6}$/.test(value)
 
 const renderShopifyAppHome = (res, dashboard) => {
   const {
@@ -98,12 +148,17 @@ const renderShopifyAppHome = (res, dashboard) => {
     productCount,
     flowCount,
     activeFlow,
-    installedAt
+    installedAt,
+    saved
   } = dashboard
 
   const category = brand?.product_category || 'skincare'
   const color = brand?.primary_color || '#1B4332'
   const brandName = brand?.name || shopSlug(shop).replace(/-/g, ' ')
+  const settingsToken = signShopToken(shop, 'settings')
+  const categoryOptions = ['skincare', 'haircare', 'supplements']
+    .map(option => `<option value="${option}" ${option === category ? 'selected' : ''}>${option}</option>`)
+    .join('')
 
   res
     .type('html')
@@ -173,6 +228,15 @@ const renderShopifyAppHome = (res, dashboard) => {
         font-weight: 650;
         font-size: 13px;
       }
+      .notice {
+        margin-bottom: 16px;
+        padding: 12px 14px;
+        border-radius: 8px;
+        color: #0a6b45;
+        background: #d1f7e5;
+        border: 1px solid #9de4bd;
+        font-weight: 650;
+      }
       .rows { margin-top: 16px; border-top: 1px solid #ebedf0; }
       .row {
         display: grid;
@@ -216,6 +280,26 @@ const renderShopifyAppHome = (res, dashboard) => {
         gap: 10px;
         margin-top: 12px;
       }
+      .settings {
+        display: grid;
+        gap: 14px;
+        margin-top: 16px;
+      }
+      .field {
+        display: grid;
+        gap: 6px;
+      }
+      .field label {
+        font-weight: 650;
+      }
+      .field select,
+      .field input[type="color"] {
+        width: 100%;
+        min-height: 38px;
+      }
+      .field input[type="color"] {
+        padding: 3px;
+      }
       .step {
         display: grid;
         grid-template-columns: 22px minmax(0, 1fr);
@@ -244,6 +328,7 @@ const renderShopifyAppHome = (res, dashboard) => {
     <main>
       <div class="eyebrow">Shopify app</div>
       <h1>AlphaMark AI Recommendation</h1>
+      ${saved ? '<div class="notice">Settings saved.</div>' : ''}
 
       <section class="grid">
         <div class="panel">
@@ -290,6 +375,23 @@ const renderShopifyAppHome = (res, dashboard) => {
             <a class="button secondary" href="${escapeHtml(storefrontUrl(shop))}" target="_blank">View storefront</a>
           </div>
         </div>
+
+        <aside class="panel">
+          <h2>Brand settings</h2>
+          <form class="settings" method="post" action="/shopify/settings">
+            <input type="hidden" name="shop" value="${escapeHtml(shop)}">
+            <input type="hidden" name="token" value="${escapeHtml(settingsToken)}">
+            <div class="field">
+              <label for="category">Brand category</label>
+              <select id="category" name="category">${categoryOptions}</select>
+            </div>
+            <div class="field">
+              <label for="primary_color">Widget color</label>
+              <input id="primary_color" name="primary_color" type="color" value="${escapeHtml(color)}">
+            </div>
+            <button class="button" type="submit">Save settings</button>
+          </form>
+        </aside>
 
         <aside class="panel">
           <h2>Setup checklist</h2>
@@ -451,7 +553,7 @@ const startShopifyInstall = async (req, res) => {
     const installedStore = await getInstalledStore(shop)
     if (installedStore) {
       const dashboard = await getShopDashboard(shop)
-      return renderShopifyAppHome(res, dashboard || { shop })
+      return renderShopifyAppHome(res, { ...(dashboard || { shop }), saved: req.query.saved === '1' })
     }
 
     const redirectUri = `${appUrl}/shopify/callback`
@@ -464,6 +566,52 @@ const startShopifyInstall = async (req, res) => {
     res.redirect(installUrl.toString())
   } catch (error) {
     console.error('Shopify install error:', error)
+    res.status(500).send(error.message)
+  }
+}
+
+const updateShopifySettings = async (req, res) => {
+  try {
+    const { appUrl } = shopifyConfig()
+    const shop = req.body.shop
+    const token = req.body.token
+    const category = String(req.body.category || '').toLowerCase()
+    const primaryColor = req.body.primary_color || '#1B4332'
+
+    if (!isValidShopDomain(shop)) {
+      return res.status(400).send('A valid shop is required.')
+    }
+
+    if (!verifyShopToken(token, shop, 'settings')) {
+      return res.status(401).send('Invalid settings token.')
+    }
+
+    if (!validBrandCategories.has(category)) {
+      return res.status(400).send('Invalid brand category.')
+    }
+
+    if (!isValidHexColor(primaryColor)) {
+      return res.status(400).send('Invalid widget color.')
+    }
+
+    const dashboard = await getShopDashboard(shop)
+    if (!dashboard?.brand?.brand_id) {
+      return res.status(404).send('Shop is not connected to AlphaMark.')
+    }
+
+    const { error } = await supabase
+      .from('brands')
+      .update({
+        product_category: category,
+        primary_color: primaryColor
+      })
+      .eq('brand_id', dashboard.brand.brand_id)
+
+    if (error) throw error
+
+    res.redirect(`${appUrl}/shopify?shop=${encodeURIComponent(shop)}&saved=1`)
+  } catch (error) {
+    console.error('Shopify settings update error:', error)
     res.status(500).send(error.message)
   }
 }
@@ -614,6 +762,7 @@ const shopifyHealth = (req, res) => {
 
 module.exports = {
   startShopifyInstall,
+  updateShopifySettings,
   handleShopifyCallback,
   getShopBrandConfig,
   handleAppUninstalledWebhook,
