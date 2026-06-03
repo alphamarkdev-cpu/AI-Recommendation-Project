@@ -145,6 +145,158 @@ const normalizeBrandCategory = value => String(value || 'general')
   .replace(/\s+/g, ' ')
   .slice(0, 80)
 
+const stripHtml = value => String(value || '')
+  .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+  .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+  .replace(/<[^>]*>/g, ' ')
+  .replace(/\s+/g, ' ')
+  .trim()
+
+const parseShopifyTags = tags => String(tags || '')
+  .split(',')
+  .map(tag => tag.trim())
+  .filter(Boolean)
+  .filter((tag, index, all) => all.findIndex(item => item.toLowerCase() === tag.toLowerCase()) === index)
+
+const parseLinkHeader = linkHeader => {
+  if (!linkHeader) return null
+
+  const nextLink = linkHeader
+    .split(',')
+    .map(part => part.trim())
+    .find(part => part.includes('rel="next"'))
+
+  return nextLink?.match(/<([^>]+)>/)?.[1] || null
+}
+
+const fetchShopifyProducts = async (shop, accessToken) => {
+  const products = []
+  let nextUrl = `https://${shop}/admin/api/${SHOPIFY_API_VERSION}/products.json?limit=250`
+
+  while (nextUrl) {
+    const response = await axios.get(nextUrl, {
+      headers: {
+        'X-Shopify-Access-Token': accessToken,
+        Accept: 'application/json'
+      }
+    })
+
+    products.push(...(response.data?.products || []))
+    nextUrl = parseLinkHeader(response.headers.link)
+  }
+
+  return products
+}
+
+const shopifyProductUrl = (shop, product) => (
+  product.handle ? `https://${shop}/products/${product.handle}` : null
+)
+
+const buildProductPayload = (shop, brand, product) => {
+  const tags = parseShopifyTags(product.tags)
+  const firstVariant = product.variants?.[0]
+  const price = Number(firstVariant?.price || 0)
+  const imageUrl = product.image?.src || product.images?.[0]?.src || null
+  const category = String(product.product_type || brand.product_category || 'general').trim() || 'general'
+
+  return {
+    brand_id: brand.brand_id,
+    name: product.title || 'Untitled product',
+    category,
+    description: stripHtml(product.body_html),
+    usage_step: category,
+    time_of_day: 'As needed',
+    how_to_use: 'Use as directed by the brand.',
+    price: Number.isFinite(price) ? price : 0,
+    image_url: imageUrl,
+    product_url: shopifyProductUrl(shop, product),
+    suitable_skin_types: tags,
+    is_active: product.status !== 'archived'
+  }
+}
+
+const getExistingProductId = async (brandId, payload) => {
+  let query = supabase
+    .from('products')
+    .select('product_id')
+    .eq('brand_id', brandId)
+    .limit(1)
+
+  query = payload.product_url
+    ? query.eq('product_url', payload.product_url)
+    : query.eq('name', payload.name)
+
+  const { data, error } = await query.maybeSingle()
+  if (error) throw error
+
+  return data?.product_id || null
+}
+
+const ensureProductConcernTags = async (productId, product, payload) => {
+  const { count, error: countError } = await supabase
+    .from('concern_tags')
+    .select('product_id', { count: 'exact', head: true })
+    .eq('product_id', productId)
+
+  if (countError) throw countError
+  if (count) return
+
+  const tags = parseShopifyTags(product.tags)
+  const concerns = [
+    ...tags,
+    product.product_type,
+    product.vendor,
+    payload.category
+  ]
+    .map(value => String(value || '').trim())
+    .filter(Boolean)
+    .filter((value, index, all) => all.findIndex(item => item.toLowerCase() === value.toLowerCase()) === index)
+    .slice(0, 8)
+
+  if (!concerns.length) return
+
+  const { error } = await supabase
+    .from('concern_tags')
+    .insert(concerns.map((concern, index) => ({
+      product_id: productId,
+      concern,
+      severity_level: 3,
+      priority_score: Math.max(1, 8 - index)
+    })))
+
+  if (error) throw error
+}
+
+const saveShopifyProducts = async (shop, brand, shopifyProducts) => {
+  let savedCount = 0
+
+  for (const shopifyProduct of shopifyProducts) {
+    const payload = buildProductPayload(shop, brand, shopifyProduct)
+    const existingProductId = await getExistingProductId(brand.brand_id, payload)
+
+    const write = existingProductId
+      ? supabase
+        .from('products')
+        .update(payload)
+        .eq('product_id', existingProductId)
+        .select('product_id')
+        .single()
+      : supabase
+        .from('products')
+        .insert(payload)
+        .select('product_id')
+        .single()
+
+    const { data, error } = await write
+    if (error) throw error
+
+    await ensureProductConcernTags(data.product_id, shopifyProduct, payload)
+    savedCount += 1
+  }
+
+  return savedCount
+}
+
 const renderShopifyAppHome = (res, dashboard) => {
   const {
     shop,
@@ -153,13 +305,16 @@ const renderShopifyAppHome = (res, dashboard) => {
     flowCount,
     activeFlow,
     installedAt,
-    saved
+    saved,
+    synced,
+    syncError
   } = dashboard
 
   const category = brand?.product_category || 'general'
   const color = brand?.primary_color || '#1B4332'
   const brandName = brand?.name || shopSlug(shop).replace(/-/g, ' ')
   const settingsToken = signShopToken(shop, 'settings')
+  const syncToken = signShopToken(shop, 'sync_products')
 
   res
     .type('html')
@@ -237,6 +392,11 @@ const renderShopifyAppHome = (res, dashboard) => {
         background: #d1f7e5;
         border: 1px solid #9de4bd;
         font-weight: 650;
+      }
+      .notice.error {
+        color: #8a6116;
+        background: #fff4d6;
+        border-color: #ffd98d;
       }
       .rows { margin-top: 16px; border-top: 1px solid #ebedf0; }
       .row {
@@ -334,6 +494,8 @@ const renderShopifyAppHome = (res, dashboard) => {
       <div class="eyebrow">Shopify app</div>
       <h1>AlphaMark AI Recommendation</h1>
       ${saved ? '<div class="notice">Settings saved.</div>' : ''}
+      ${synced ? `<div class="notice">${Number(synced)} Shopify products synced.</div>` : ''}
+      ${syncError ? `<div class="notice error">${escapeHtml(syncError)}</div>` : ''}
 
       <section class="grid">
         <div class="panel">
@@ -395,6 +557,16 @@ const renderShopifyAppHome = (res, dashboard) => {
               <input id="primary_color" name="primary_color" type="color" value="${escapeHtml(color)}">
             </div>
             <button class="button" type="submit">Save settings</button>
+          </form>
+        </aside>
+
+        <aside class="panel">
+          <h2>Shopify products</h2>
+          <p>Import this store's active Shopify catalog into AlphaMark so recommendations can use real product data.</p>
+          <form class="settings" method="post" action="/shopify/products/sync">
+            <input type="hidden" name="shop" value="${escapeHtml(shop)}">
+            <input type="hidden" name="token" value="${escapeHtml(syncToken)}">
+            <button class="button" type="submit">Sync Shopify products</button>
           </form>
         </aside>
 
@@ -558,7 +730,12 @@ const startShopifyInstall = async (req, res) => {
     const installedStore = await getInstalledStore(shop)
     if (installedStore) {
       const dashboard = await getShopDashboard(shop)
-      return renderShopifyAppHome(res, { ...(dashboard || { shop }), saved: req.query.saved === '1' })
+      return renderShopifyAppHome(res, {
+        ...(dashboard || { shop }),
+        saved: req.query.saved === '1',
+        synced: req.query.synced,
+        syncError: req.query.sync_error
+      })
     }
 
     const redirectUri = `${appUrl}/shopify/callback`
@@ -572,6 +749,48 @@ const startShopifyInstall = async (req, res) => {
   } catch (error) {
     console.error('Shopify install error:', error)
     res.status(500).send(error.message)
+  }
+}
+
+const syncShopifyProducts = async (req, res) => {
+  const { appUrl } = shopifyConfig()
+  const shop = req.body.shop
+
+  try {
+    const token = req.body.token
+
+    if (!isValidShopDomain(shop)) {
+      return res.status(400).send('A valid shop is required.')
+    }
+
+    if (!verifyShopToken(token, shop, 'sync_products')) {
+      return res.status(401).send('Invalid product sync token.')
+    }
+
+    const { data: store, error: storeError } = await supabase
+      .from('shopify_stores')
+      .select(`
+        shop_domain,
+        access_token,
+        brands(brand_id, product_category)
+      `)
+      .eq('shop_domain', shop)
+      .is('uninstalled_at', null)
+      .maybeSingle()
+
+    if (storeError) throw storeError
+    if (!store?.access_token || !store?.brands?.brand_id) {
+      return res.status(404).send('Shop is not connected to AlphaMark.')
+    }
+
+    const shopifyProducts = await fetchShopifyProducts(shop, store.access_token)
+    const savedCount = await saveShopifyProducts(shop, store.brands, shopifyProducts)
+
+    res.redirect(`${appUrl}/shopify?shop=${encodeURIComponent(shop)}&synced=${savedCount}`)
+  } catch (error) {
+    console.error('Shopify product sync error:', error.response?.data || error)
+    const message = encodeURIComponent(error.response?.data?.errors || error.message || 'Product sync failed.')
+    res.redirect(`${appUrl}/shopify?shop=${encodeURIComponent(shop)}&sync_error=${message}`)
   }
 }
 
@@ -768,6 +987,7 @@ const shopifyHealth = (req, res) => {
 module.exports = {
   startShopifyInstall,
   updateShopifySettings,
+  syncShopifyProducts,
   handleShopifyCallback,
   getShopBrandConfig,
   handleAppUninstalledWebhook,

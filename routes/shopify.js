@@ -2,6 +2,7 @@ const express = require('express')
 const {
   startShopifyInstall,
   updateShopifySettings,
+  syncShopifyProducts,
   handleShopifyCallback,
   getShopBrandConfig,
   shopifyHealth
@@ -13,6 +14,8 @@ const router = express.Router()
 router.get('/', startShopifyInstall)
 // Saves brand-level Shopify app settings from the embedded admin dashboard.
 router.post('/settings', express.urlencoded({ extended: false }), updateShopifySettings)
+// Imports Shopify catalog products into the connected AlphaMark brand.
+router.post('/products/sync', express.urlencoded({ extended: false }), syncShopifyProducts)
 // Receives Shopify OAuth callback and stores the shop access token.
 router.get('/callback', handleShopifyCallback)
 // Simple browser-readable health page for app URL checks.
