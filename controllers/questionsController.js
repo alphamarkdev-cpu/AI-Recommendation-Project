@@ -151,16 +151,16 @@ const buildFallbackFlow = (category, products) => {
 
   const concernOptions = Array.from(concernSet).slice(0, 8)
   const typeOptions = Array.from(typeSet).slice(0, 6)
-  const concerns = concernOptions.length ? concernOptions : ['Acne', 'Oiliness', 'Dryness', 'Sensitivity']
-  const types = typeOptions.length ? typeOptions : ['Oily', 'Dry', 'Combination', 'Sensitive']
+  const concerns = concernOptions.length ? concernOptions : ['Quality', 'Fit', 'Performance', 'Value']
+  const types = typeOptions.length ? typeOptions : ['Beginner', 'Regular user', 'Advanced user', 'Not sure']
 
   const questions_json = [
     { question_id: 'q1', field_key: 'primary_concern', question_text: 'What is your main concern right now?', sub_text: 'Choose the closest match so we can route your assessment.', input_type: 'chips', options_json: concerns, category, section_label: 'Assessment' },
-    { question_id: 'q2', field_key: 'skin_type', question_text: 'Which type describes you best?', sub_text: 'This helps us avoid products that may feel too heavy or too drying.', input_type: 'cards', options_json: types.map(type => ({ label: type, emoji: '', sub: '' })), category, section_label: 'Assessment' },
+    { question_id: 'q2', field_key: 'profile_type', question_text: 'Which option describes you best?', sub_text: 'This helps us match products to your needs and preferences.', input_type: 'cards', options_json: types.map(type => ({ label: type, emoji: '', sub: '' })), category, section_label: 'Assessment' },
     { question_id: 'q3', field_key: 'concern_severity', question_text: 'How intense is this concern currently?', sub_text: 'Use 1 for mild and 5 for very intense.', input_type: 'scale', options_json: [1, 2, 3, 4, 5], category, section_label: 'Assessment' },
     { question_id: 'q4', field_key: 'concern_duration', question_text: 'How long has this concern been present?', sub_text: 'A rough estimate is enough.', input_type: 'chips', options_json: ['Less than 1 month', '1-3 months', '3-6 months', 'More than 6 months'], category, section_label: 'Assessment' },
     { question_id: 'q5', field_key: 'known_triggers', question_text: 'What usually triggers or worsens it?', sub_text: 'Choose the strongest trigger.', input_type: 'chips', options_json: ['Stress', 'Sleep', 'Diet', 'Weather', 'Products', 'Not sure'], category, section_label: 'Assessment' },
-    { question_id: 'q6', field_key: 'previous_treatments', question_text: 'Have you already tried anything for this?', sub_text: 'Mention products, treatments, or home remedies.', input_type: 'text', options_json: { placeholder: 'Example: salicylic acid face wash, dermatologist cream...' }, category, section_label: 'Assessment' },
+    { question_id: 'q6', field_key: 'previous_products', question_text: 'Have you already tried anything for this?', sub_text: 'Mention products, services, or approaches you tried before.', input_type: 'text', options_json: { placeholder: 'Example: product names, routines, or what worked/did not work...' }, category, section_label: 'Assessment' },
     { question_id: 'q7', field_key: 'allergies', question_text: 'Any allergies or ingredients you avoid?', sub_text: 'This helps us filter unsafe recommendations.', input_type: 'text', options_json: { placeholder: 'Write none if there are no known allergies' }, category, section_label: 'Assessment' },
     { question_id: 'q8', field_key: 'budget', question_text: 'What budget range feels comfortable?', sub_text: 'We will keep recommendations practical.', input_type: 'chips', options_json: ['Under 500', '500-1000', '1000-2000', 'No strict budget'], category, section_label: 'Assessment' }
   ]
@@ -390,7 +390,7 @@ const getActiveQuestionFlow = async (req, res) => {
 // Generates and stores a new brand question flow from the brand's current product catalogue.
 const generateQuestionFlow = async (req, res) => {
   try {
-    const category = req.body.category || req.body.brand_category || req.brand.product_category || 'skincare'
+    const category = req.body.category || req.body.brand_category || req.brand.product_category || 'general'
     const brandId = req.brand.brand_id
 
     const { data: products, error: productsError } = await supabase
@@ -439,14 +439,14 @@ COUNT AND COVERAGE RULES:
 - Do not generate 2, 8, 10, or 18 questions. The response is invalid unless questions_json.length is exactly ${GENERATED_QUESTION_COUNT}.
 - q1 must ask the user's biggest concern and must use field_key "primary_concern".
 - q1 options must include at least 4 main concerns supported by the product catalogue.
-- q2-q10 must be concern-specific follow-up questions grouped across the main concerns from q1.
+- q2-q10 must be concern-specific follow-up questions grouped across the main needs or concerns from q1.
 - q11-q14 must be shared final questions for allergies/avoided ingredients, previous treatments, routine habits, and budget.
 - Not every user should answer every question. The flow_json will later choose one relevant path.
 - Design the bank so a user path can contain 5 to 8 questions while the database stores all ${GENERATED_QUESTION_COUNT}.
 
 QUESTION CONTENT RULES:
-- Create different follow-up paths for concerns such as acne/breakouts, oily skin, dark spots/pigmentation, dryness, sensitivity, aging, dullness, or any other concerns found in the product catalogue.
-- Include severity, duration, subtype, triggers, and sensitivity follow-ups where relevant.
+- Create different follow-up paths for the main needs, goals, concerns, use cases, preferences, constraints, or product-fit signals found in the product catalogue.
+- Include severity, duration, subtype, usage context, triggers, constraints, and sensitivity/safety follow-ups only where relevant to the brand category.
 - Use only these input_type values: "chips", "cards", "scale", "text".
 - Use concise consumer-friendly wording.
 - Every question must have a stable question_id like "q1", "q2", etc.
@@ -515,8 +515,8 @@ Rules:
 - questions_json must contain exactly ${GENERATED_QUESTION_COUNT} complete question objects.
 - Use question_id values q1 through q${GENERATED_QUESTION_COUNT} with no gaps.
 - q1 field_key must be "primary_concern" and must have at least 4 concern options.
-- q2-q10 must be concern-specific follow-up questions.
-- q11-q14 must be shared final questions: allergies/avoided ingredients, previous treatments, routine habits, and budget.
+- q2-q10 must be category-specific follow-up questions.
+- q11-q14 must be shared final questions: allergies/avoided ingredients or restrictions, previous products tried, usage habits, and budget.
 - Use only input_type: "chips", "cards", "scale", "text".
 - Do not include markdown or explanations.
 
@@ -783,8 +783,8 @@ Rules:
 - If gender is Female, prioritise hormonal questions (PCOD, thyroid)
 - If stress is high (4 or 5), prioritise stress-related questions
 - If sleep is poor, prioritise questions related to deficiency
-- If age is under 25, prioritise acne and early prevention questions
-- If age is over 35, prioritise aging and hormonal questions
+- If age is relevant to this brand category, use it to choose age-appropriate follow-up questions.
+- Prioritise questions that match the stated brand category, product catalogue, and consumer goals.
 - Avoid redundant questions — pick diverse questions that cover different angles
 - Always include the primary concern question for the category
 

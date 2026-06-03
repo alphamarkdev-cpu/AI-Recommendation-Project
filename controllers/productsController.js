@@ -21,8 +21,8 @@ const getProducts = async (req, res) => {
   }
 }
 
-// Finds and ranks active brand products that best match the user's selected types and concerns.
-const getMatchingProducts = async (brandId, skinTypes, concerns) => {
+// Finds and ranks active brand products that best match the user's selected profile attributes and concerns.
+const getMatchingProducts = async (brandId, profileTypes, concerns) => {
   try {
     // fetch ALL active products for this brand
     const { data, error } = await supabase
@@ -40,7 +40,7 @@ const getMatchingProducts = async (brandId, skinTypes, concerns) => {
 
     console.log('Total products for brand:', data.length)
     console.log('Filtering by concerns:', concerns)
-    console.log('Filtering by skinTypes:', skinTypes)
+    console.log('Filtering by profile attributes:', profileTypes)
 
     // filter by concern_tags — works for ALL categories
     let filtered = data.filter(product =>
@@ -54,18 +54,18 @@ const getMatchingProducts = async (brandId, skinTypes, concerns) => {
 
     console.log('After concern filter:', filtered.length)
 
-    // if no concern match — try matching by suitable_skin_types
+    // if no concern match, try the legacy suitable_skin_types column as generic profile attributes.
     if(filtered.length === 0){
       filtered = data.filter(product =>
         product.suitable_skin_types &&
         product.suitable_skin_types.some(st =>
-          skinTypes.some(s =>
+          profileTypes.some(s =>
             st.toLowerCase().includes(s.toLowerCase()) ||
             s.toLowerCase().includes(st.toLowerCase())
           )
         )
       )
-      console.log('After skin type filter:', filtered.length)
+      console.log('After profile attribute filter:', filtered.length)
     }
 
     // if still nothing — return all products for this brand

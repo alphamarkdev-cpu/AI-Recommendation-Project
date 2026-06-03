@@ -39,17 +39,9 @@ app.use('/api/shopify', shopifyRouter)
 app.use('/public', express.static(path.join(__dirname, 'public')))
 app.use(express.static(path.join(__dirname)))
 
-// Serves the default skincare widget HTML file to the browser.
+// Serves the category-neutral widget HTML file to the browser.
 app.get('/widget', (req, res) => {
   res.sendFile(path.join(__dirname, 'alphamark-widget-v3.html'))
-})
-// Serves the haircare widget variant to the browser.
-app.get('/widget-hair', (req, res) => {
-  res.sendFile(path.join(__dirname, 'alphamark-widget-hair.html'))
-})
-// Serves the supplements widget variant to the browser.
-app.get('/widget-supplements', (req, res) => {
-  res.sendFile(path.join(__dirname, 'alphamark-widget-supplements.html'))
 })
 
 // Simple health check route used to confirm that the API server is running.

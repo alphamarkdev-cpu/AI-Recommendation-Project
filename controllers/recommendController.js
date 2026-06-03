@@ -72,9 +72,11 @@ const getClarificationCandidates = async (brandId, category, answeredFields = []
 const getRecommendation = async (req, res) => {
   try {
     const {
+      profile_type,
       skin_type,
       concerns,
       age,
+      concern_duration,
       acne_duration,
       allergies,
       budget,
@@ -87,9 +89,11 @@ const getRecommendation = async (req, res) => {
 
     const brandId   = req.brand.brand_id
     const brandName = req.brand.name
-    const brandCategory = req.brand.product_category || req.brand.category || 'skincare'
+    const brandCategory = req.brand.product_category || req.brand.category || 'general'
 
-    const skinTypes    = Array.isArray(skin_type) ? skin_type : [skin_type]
+    const profileInput = profile_type || skin_type
+    const durationInput = concern_duration || acne_duration
+    const profileTypes = Array.isArray(profileInput) ? profileInput : [profileInput]
     const concernsList = Array.isArray(concerns)  ? concerns  : [concerns]
     const photoImage = parseDataUrlImage(photo_image)
     const hasClarificationAnswers = clarification_answers &&
@@ -106,7 +110,7 @@ const getRecommendation = async (req, res) => {
     // . Step 1: Fetch matching products .
     const matchingProducts = photoImage
       ? await getActiveBrandProducts(brandId)
-      : await getMatchingProducts(brandId, skinTypes, concernsList)
+      : await getMatchingProducts(brandId, profileTypes, concernsList)
 
     if (!matchingProducts || matchingProducts.length === 0) {
       return res.status(404).json({
@@ -123,7 +127,7 @@ const getRecommendation = async (req, res) => {
       description:         p.description,
       how_to_use:          p.how_to_use,
       price:               p.price,
-      suitable_skin_types: p.suitable_skin_types,
+      suitable_customer_attributes: p.suitable_skin_types,
       concerns_it_solves:  p.concern_tags.map(t => `${t.concern} (severity ${t.severity_level}, priority ${t.priority_score})`),
       key_ingredients:     p.ingredients.map(i => i.name)
     }))
@@ -142,14 +146,14 @@ You are an expert ${brandCategory} advisor for ${brandName}.
 
 CONSUMER PROFILE:
 - Brand category: ${brandCategory}
-- Skin/Hair/Body type: ${skinTypes.join(', ')}
+- Customer type / profile attribute: ${profileTypes.join(', ')}
 - Primary concern: ${concernsList.join(', ')}
 - Age: ${age}
-- Concern duration: ${acne_duration || 'Not specified'}
+- Concern duration: ${durationInput || 'Not specified'}
 - Known allergies: ${allergies || 'None'}
 - Budget: ${budget || 'Not specified'}
 - Details: ${additional_info || 'None'}
-- Photo: ${photoImage ? 'Uploaded skin photo is attached for visual analysis' : 'Not provided'}
+- Photo: ${photoImage ? `Uploaded photo is attached for ${brandCategory} visual analysis` : 'Not provided'}
 - Clarification answers: ${hasClarificationAnswers ? JSON.stringify(clarification_answers, null, 2) : 'None yet'}
 
 AVAILABLE PRODUCTS IN DATABASE (ONLY use these â€” do NOT invent products):
@@ -160,9 +164,9 @@ ${JSON.stringify(clarificationCandidates, null, 2)}
 
 YOUR TASK:
 1. If a photo is attached, first verify that the photo is relevant to the brand category.
-2. For skincare, a relevant photo should show inspectable skin such as face, neck, or another skin area. For haircare, a relevant photo should show hair, scalp, hairline, or a hair-density/texture view. For supplements, the photo is optional and should not be used unless it clearly helps with the selected wellness category.
+2. Decide relevance from the brand category, product catalogue, and the consumer's selected concern. Example: for apparel the image should show clothing/body fit context; for footwear it should show feet/shoes/wear context; for beauty it should show the relevant body area or product-use context; for pet care it should show the pet or product-use context; for home goods it should show the space or item context.
 3. If the uploaded photo is not relevant to the brand category, return blocked=true in photo_verification and do not create product routines.
-4. If the photo is relevant, inspect visible signs for that category. For skincare: oiliness, redness, acne, texture, marks, tanning, pigmentation, dryness, irritation. For haircare: scalp visibility, flakes, oiliness, density, thinning, hairline, dryness, frizz, damage.
+4. If the photo is relevant, inspect only the visible signals that are useful for this specific category and concern. Do not force assumptions from any other vertical.
 5. Compare photo evidence with the consumer's text answers.
 6. If text answers and photo evidence conflict and clarification answers are "None yet", ask 2-3 extra questions from AVAILABLE STORED CLARIFICATION QUESTIONS before creating a routine.
 7. Clarification questions must be copied exactly from AVAILABLE STORED CLARIFICATION QUESTIONS and must not repeat already answered fields.
@@ -185,15 +189,15 @@ STRICT RULES:
 - If clarification_required is true, leave morning_routine, evening_routine, tips, and lifestyle_recommendations as empty arrays.
 - recommendation_basis: exactly one of "text_answers", "photo", "text_and_photo", or "no_photo".
 - basis_explanation: one short sentence. If text and photo conflict, say which signal was stronger and why.
-- skin_assessment: MAX 2 sentences â€” be specific about their concern
+- skin_assessment: MAX 2 sentences. Keep this key name for API compatibility, but write a category-specific customer assessment rather than a skin-only assessment.
 - concern_level: exactly one of "Mild", "Moderate", or "Severe"
-- how_to_use: MAX 1 catchy action sentence e.g. "Smooth 2 drops over clean skin for a fresh, calm finish"
+- how_to_use: MAX 1 clear action sentence suited to this product category.
 - why_chosen: MAX 1 benefit-led sentence - mention their specific concern and why this product helps
 - time_to_apply: specific time e.g. "After waking up" or "Before sleeping"
 - lifestyle_recommendations: exactly 4 items, practical and personalised to their lifestyle answers
 - lifestyle title: MAX 4 words
 - lifestyle action: MAX 1 catchy, specific sentence
-- lifestyle reason: MAX 1 short benefit sentence connected to skin/hair/wellness
+- lifestyle reason: MAX 1 short benefit sentence connected to the product category and customer goal.
 - tips: exactly 3 short tips based on their lifestyle answers
 - warning: one line only, or null if no warning
 
@@ -202,22 +206,22 @@ Respond ONLY in this exact JSON â€” no markdown, no extra text:
   "photo_verification": {
     "blocked": false,
     "is_relevant": true,
-    "detected_subject": "face skin",
+    "detected_subject": "relevant subject for the brand category",
     "message": null
   },
   "recommendation_basis": "text_and_photo",
-  "basis_explanation": "The routine uses both your answers and visible skin signs from the uploaded photo.",
+  "basis_explanation": "The routine uses both your answers and useful visible signals from the uploaded photo.",
   "clarification_required": false,
   "clarification_reason": null,
   "clarification_questions": [],
-  "skin_assessment": "2 sentences max about their specific condition.",
+  "skin_assessment": "2 sentences max about their specific need or goal.",
   "concern_level": "Mild",
   "morning_routine": [
     {
       "step": 1,
       "product_name": "exact name from database",
       "category": "exact category from database",
-      "time_to_apply": "After waking up, on clean face",
+      "time_to_apply": "Best time or situation to use this product",
       "how_to_use": "One catchy action sentence",
       "why_chosen": "One benefit-led reason for this consumer",
       "price": 0
@@ -243,7 +247,7 @@ Respond ONLY in this exact JSON â€” no markdown, no extra text:
     {
       "title": "Hydration rhythm",
       "action": "Drink a glass of water before every tea or coffee.",
-      "reason": "Steady hydration can support a fresher, less tired-looking complexion."
+      "reason": "A small supportive habit can help this routine work more consistently."
     }
   ],
   "warning": null
@@ -309,9 +313,12 @@ Respond ONLY in this exact JSON â€” no markdown, no extra text:
       .insert({
         brand_id: brandId,
         answers_json: {
-          skin_type: skinTypes,
+          profile_type: profileTypes,
           concerns:  concernsList,
-          age, acne_duration, allergies, budget,
+          age,
+          concern_duration: durationInput,
+          allergies,
+          budget,
           additional_info,
           clarification_answers: clarification_answers || null,
           ...(all_answers || {})

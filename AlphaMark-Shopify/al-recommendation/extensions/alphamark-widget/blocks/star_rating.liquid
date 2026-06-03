@@ -3,6 +3,7 @@
   data-api-url="{{ block.settings.api_url }}"
   data-brand-key="{{ block.settings.brand_key }}"
   data-brand-category="{{ block.settings.brand_category }}"
+  data-button-text="{{ block.settings.button_text }}"
   data-shop-domain="{{ shop.permanent_domain }}"
 ></div>
 
@@ -11,6 +12,7 @@
   window.AlphaMarkWidgetConfig.apiUrl = "{{ block.settings.api_url }}";
   window.AlphaMarkWidgetConfig.brandKey = "{{ block.settings.brand_key }}";
   window.AlphaMarkWidgetConfig.brandCategory = "{{ block.settings.brand_category }}";
+  window.AlphaMarkWidgetConfig.buttonText = "{{ block.settings.button_text }}";
   window.AlphaMarkWidgetConfig.shopDomain = "{{ shop.permanent_domain }}";
 </script>
 
@@ -19,6 +21,7 @@
   data-api-url="{{ block.settings.api_url }}"
   data-brand-key="{{ block.settings.brand_key }}"
   data-category="{{ block.settings.brand_category }}"
+  data-button-text="{{ block.settings.button_text }}"
   data-shop-domain="{{ shop.permanent_domain }}"
   defer
 ></script>
@@ -45,6 +48,12 @@
       "id": "brand_category",
       "label": "Brand category",
       "default": "general"
+    },
+    {
+      "type": "text",
+      "id": "button_text",
+      "label": "Button text",
+      "default": "Find My Match"
     }
   ]
 }
