@@ -204,13 +204,16 @@ const buildProductPayload = (shop, brand, product) => {
     name: product.title || 'Untitled product',
     category,
     description: stripHtml(product.body_html),
-    usage_step: 1,
-    time_of_day: 'As needed',
+    recommendation_step: 1,
+    recommended_timing: 'As needed',
     how_to_use: 'Use as directed by the brand.',
     price: Number.isFinite(price) ? price : 0,
     image_url: imageUrl,
     product_url: shopifyProductUrl(shop, product),
-    suitable_skin_types: tags,
+    suitable_customer_attributes: tags,
+    external_product_id: product.id ? String(product.id) : null,
+    vendor: product.vendor || null,
+    product_tags: tags,
     is_active: product.status !== 'archived'
   }
 }
@@ -232,9 +235,9 @@ const getExistingProductId = async (brandId, payload) => {
   return data?.product_id || null
 }
 
-const ensureProductConcernTags = async (productId, product, payload) => {
+const ensureProductMatchTags = async (productId, product, payload) => {
   const { count, error: countError } = await supabase
-    .from('concern_tags')
+    .from('product_match_tags')
     .select('product_id', { count: 'exact', head: true })
     .eq('product_id', productId)
 
@@ -256,11 +259,11 @@ const ensureProductConcernTags = async (productId, product, payload) => {
   if (!concerns.length) return
 
   const { error } = await supabase
-    .from('concern_tags')
-    .insert(concerns.map((concern, index) => ({
+    .from('product_match_tags')
+    .insert(concerns.map((matchTag, index) => ({
       product_id: productId,
-      concern,
-      severity_level: 3,
+      match_tag: matchTag,
+      intensity_level: 3,
       priority_score: Math.max(1, 8 - index)
     })))
 
@@ -290,7 +293,7 @@ const saveShopifyProducts = async (shop, brand, shopifyProducts) => {
     const { data, error } = await write
     if (error) throw error
 
-    await ensureProductConcernTags(data.product_id, shopifyProduct, payload)
+    await ensureProductMatchTags(data.product_id, shopifyProduct, payload)
     savedCount += 1
   }
 

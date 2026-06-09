@@ -1,14 +1,14 @@
 const supabase = require('../config/supabase')
 
-// Returns all active products for the authenticated brand, including ingredients and concern tags.
+// Returns all active products for the authenticated brand, including components and match tags.
 const getProducts = async (req, res) => {
   try {
     const { data, error } = await supabase
       .from('products')
       .select(`
         *,
-        ingredients(*),
-        concern_tags(*)
+        product_components(*),
+        product_match_tags(*)
       `)
       .eq('brand_id', req.brand.brand_id)
       .eq('is_active', true)
@@ -29,8 +29,8 @@ const getMatchingProducts = async (brandId, profileTypes, concerns) => {
       .from('products')
       .select(`
         *,
-        ingredients(*),
-        concern_tags(*)
+        product_components(*),
+        product_match_tags(*)
       `)
       .eq('brand_id', brandId)
       .eq('is_active', true)
@@ -42,23 +42,23 @@ const getMatchingProducts = async (brandId, profileTypes, concerns) => {
     console.log('Filtering by concerns:', concerns)
     console.log('Filtering by profile attributes:', profileTypes)
 
-    // filter by concern_tags — works for ALL categories
+    // filter by product match tags — works for all categories
     let filtered = data.filter(product =>
-      product.concern_tags.some(tag =>
+      product.product_match_tags.some(tag =>
         concerns.some(c =>
-          tag.concern.toLowerCase().includes(c.toLowerCase()) ||
-          c.toLowerCase().includes(tag.concern.toLowerCase())
+          tag.match_tag.toLowerCase().includes(c.toLowerCase()) ||
+          c.toLowerCase().includes(tag.match_tag.toLowerCase())
         )
       )
     )
 
     console.log('After concern filter:', filtered.length)
 
-    // if no concern match, try the legacy suitable_skin_types column as generic profile attributes.
+    // if no match-tag hit, try generic customer/product attributes.
     if(filtered.length === 0){
       filtered = data.filter(product =>
-        product.suitable_skin_types &&
-        product.suitable_skin_types.some(st =>
+        product.suitable_customer_attributes &&
+        product.suitable_customer_attributes.some(st =>
           profileTypes.some(s =>
             st.toLowerCase().includes(s.toLowerCase()) ||
             s.toLowerCase().includes(st.toLowerCase())
@@ -76,11 +76,11 @@ const getMatchingProducts = async (brandId, profileTypes, concerns) => {
 
     // sort by priority score descending
     const sorted = filtered.sort((a, b) => {
-      const aScore = a.concern_tags.length > 0
-        ? Math.max(...a.concern_tags.map(t => t.priority_score || 0))
+      const aScore = a.product_match_tags.length > 0
+        ? Math.max(...a.product_match_tags.map(t => t.priority_score || 0))
         : 0
-      const bScore = b.concern_tags.length > 0
-        ? Math.max(...b.concern_tags.map(t => t.priority_score || 0))
+      const bScore = b.product_match_tags.length > 0
+        ? Math.max(...b.product_match_tags.map(t => t.priority_score || 0))
         : 0
       return bScore - aScore
     })

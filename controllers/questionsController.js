@@ -141,10 +141,10 @@ const buildFallbackFlow = (category, products) => {
   const typeSet = new Set()
 
   products.forEach(product => {
-    ;(product.concern_tags || []).forEach(tag => {
-      if (tag.concern) concernSet.add(tag.concern)
+    ;(product.product_match_tags || []).forEach(tag => {
+      if (tag.match_tag) concernSet.add(tag.match_tag)
     })
-    ;(product.suitable_skin_types || []).forEach(type => {
+    ;(product.suitable_customer_attributes || []).forEach(type => {
       if (type) typeSet.add(type)
     })
   })
@@ -399,9 +399,9 @@ const generateQuestionFlow = async (req, res) => {
         name,
         category,
         description,
-        suitable_skin_types,
-        ingredients(name),
-        concern_tags(concern, severity_level, priority_score)
+        suitable_customer_attributes,
+        product_components(name),
+        product_match_tags(match_tag, intensity_level, priority_score)
       `)
       .eq('brand_id', brandId)
       .eq('is_active', true)
@@ -414,11 +414,11 @@ const generateQuestionFlow = async (req, res) => {
     const productContext = products.slice(0, 20).map(product => ({
       name: product.name,
       category: product.category,
-      suitable_skin_types: product.suitable_skin_types,
-      concerns: product.concern_tags.map(tag => tag.concern)
+      suitable_customer_attributes: product.suitable_customer_attributes,
+      match_tags: product.product_match_tags.map(tag => tag.match_tag)
     }))
     const catalogueConcerns = Array.from(new Set(
-      products.flatMap(product => (product.concern_tags || []).map(tag => tag.concern).filter(Boolean))
+      products.flatMap(product => (product.product_match_tags || []).map(tag => tag.match_tag).filter(Boolean))
     )).slice(0, 10)
 
     const questionsPrompt = `

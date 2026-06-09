@@ -24,8 +24,8 @@ const getActiveBrandProducts = async brandId => {
     .from('products')
     .select(`
       *,
-      ingredients(*),
-      concern_tags(*)
+      product_components(*),
+      product_match_tags(*)
     `)
     .eq('brand_id', brandId)
     .eq('is_active', true)
@@ -122,14 +122,14 @@ const getRecommendation = async (req, res) => {
     const productsContext = matchingProducts.map(p => ({
       name:                p.name,
       category:            p.category,
-      usage_step:          p.usage_step,
-      time_of_day:         p.time_of_day,
+      recommendation_step: p.recommendation_step,
+      recommended_timing:  p.recommended_timing,
       description:         p.description,
       how_to_use:          p.how_to_use,
       price:               p.price,
-      suitable_customer_attributes: p.suitable_skin_types,
-      concerns_it_solves:  p.concern_tags.map(t => `${t.concern} (severity ${t.severity_level}, priority ${t.priority_score})`),
-      key_ingredients:     p.ingredients.map(i => i.name)
+      suitable_customer_attributes: p.suitable_customer_attributes,
+      match_tags:          p.product_match_tags.map(t => `${t.match_tag} (intensity ${t.intensity_level}, priority ${t.priority_score})`),
+      key_components:      p.product_components.map(i => i.name)
     }))
 
     // . Step 3: Build product image + URL maps to send back to frontend .
@@ -173,7 +173,7 @@ YOUR TASK:
 8. If clarification answers are present, use them to resolve the conflict and create the final recommendation.
 9. If text and photo do not conflict, create the final recommendation immediately.
 10. Pick the best 3-4 products from the list above that match the resolved profile.
-11. Skip any product with ingredients the consumer is allergic to.
+11. Skip any product with components, materials, ingredients, or restrictions the consumer is allergic or sensitive to.
 12. Build a morning AND evening routine using only those products.
 13. Keep all text SHORT, CLEAR, and consumer-friendly.
 14. Write routine copy like a premium card: benefit-led, warm, and easy to scan.
