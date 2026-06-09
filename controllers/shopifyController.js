@@ -204,7 +204,7 @@ const buildProductPayload = (shop, brand, product) => {
     name: product.title || 'Untitled product',
     category,
     description: stripHtml(product.body_html),
-    usage_step: category,
+    usage_step: 1,
     time_of_day: 'As needed',
     how_to_use: 'Use as directed by the brand.',
     price: Number.isFinite(price) ? price : 0,
