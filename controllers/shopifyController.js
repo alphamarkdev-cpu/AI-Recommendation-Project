@@ -311,6 +311,7 @@ const renderShopifyAppHome = (res, dashboard) => {
     installedAt,
     saved,
     synced,
+    questionWarning,
     syncError
   } = dashboard
 
@@ -846,6 +847,7 @@ const renderShopifyAppHome = (res, dashboard) => {
     <main>
       ${saved ? '<div class="notice">Settings saved.</div>' : ''}
       ${synced ? `<div class="notice">${Number(synced)} Shopify products synced and question flow prepared.</div>` : ''}
+      ${questionWarning ? `<div class="notice error">${escapeHtml(questionWarning)}</div>` : ''}
       ${syncError ? `<div class="notice error">${escapeHtml(syncError)}</div>` : ''}
 
       <header class="store-header">
@@ -1139,6 +1141,7 @@ const startShopifyInstall = async (req, res) => {
         ...(dashboard || { shop }),
         saved: req.query.saved === '1',
         synced: req.query.synced,
+        questionWarning: req.query.question_warning,
         syncError: req.query.sync_error
       })
     }
@@ -1190,9 +1193,15 @@ const syncShopifyProducts = async (req, res) => {
 
     const shopifyProducts = await fetchShopifyProducts(shop, store.access_token)
     const savedCount = await saveShopifyProducts(shop, store.brands, shopifyProducts)
-    await generateQuestionFlowForBrand(store.brands, store.brands.product_category || 'general')
 
-    res.redirect(`${appUrl}/shopify?shop=${encodeURIComponent(shop)}&synced=${savedCount}`)
+    try {
+      await generateQuestionFlowForBrand(store.brands, store.brands.product_category || 'general')
+      res.redirect(`${appUrl}/shopify?shop=${encodeURIComponent(shop)}&synced=${savedCount}`)
+    } catch (questionError) {
+      console.error('Shopify automatic question generation error:', questionError)
+      const message = encodeURIComponent(questionError.message || 'Products synced, but question flow generation failed.')
+      res.redirect(`${appUrl}/shopify?shop=${encodeURIComponent(shop)}&synced=${savedCount}&question_warning=${message}`)
+    }
   } catch (error) {
     console.error('Shopify product sync error:', error.response?.data || error)
     const message = encodeURIComponent(error.response?.data?.errors || error.message || 'Product sync failed.')
