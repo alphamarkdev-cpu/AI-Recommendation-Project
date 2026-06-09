@@ -1,6 +1,7 @@
 const crypto = require('crypto')
 const axios = require('axios')
 const supabase = require('../config/supabase')
+const { generateQuestionFlowForBrand } = require('./questionsController')
 
 const SHOPIFY_API_VERSION = process.env.SHOPIFY_API_VERSION || '2025-10'
 
@@ -844,7 +845,7 @@ const renderShopifyAppHome = (res, dashboard) => {
   <body>
     <main>
       ${saved ? '<div class="notice">Settings saved.</div>' : ''}
-      ${synced ? `<div class="notice">${Number(synced)} Shopify products synced.</div>` : ''}
+      ${synced ? `<div class="notice">${Number(synced)} Shopify products synced and question flow prepared.</div>` : ''}
       ${syncError ? `<div class="notice error">${escapeHtml(syncError)}</div>` : ''}
 
       <header class="store-header">
@@ -1176,7 +1177,7 @@ const syncShopifyProducts = async (req, res) => {
       .select(`
         shop_domain,
         access_token,
-        brands(brand_id, product_category)
+        brands(brand_id, name, product_category)
       `)
       .eq('shop_domain', shop)
       .is('uninstalled_at', null)
@@ -1189,6 +1190,7 @@ const syncShopifyProducts = async (req, res) => {
 
     const shopifyProducts = await fetchShopifyProducts(shop, store.access_token)
     const savedCount = await saveShopifyProducts(shop, store.brands, shopifyProducts)
+    await generateQuestionFlowForBrand(store.brands, store.brands.product_category || 'general')
 
     res.redirect(`${appUrl}/shopify?shop=${encodeURIComponent(shop)}&synced=${savedCount}`)
   } catch (error) {

@@ -388,10 +388,9 @@ const getActiveQuestionFlow = async (req, res) => {
 }
 
 // Generates and stores a new brand question flow from the brand's current product catalogue.
-const generateQuestionFlow = async (req, res) => {
-  try {
-    const category = req.body.category || req.body.brand_category || req.brand.product_category || 'general'
-    const brandId = req.brand.brand_id
+const generateQuestionFlowForBrand = async (brand, requestedCategory) => {
+    const category = requestedCategory || brand.product_category || 'general'
+    const brandId = brand.brand_id
 
     const { data: products, error: productsError } = await supabase
       .from('products')
@@ -408,7 +407,9 @@ const generateQuestionFlow = async (req, res) => {
 
     if (productsError) throw productsError
     if (!products || products.length === 0) {
-      return res.status(404).json({ error: 'No active products found for this brand.' })
+      const error = new Error('No active products found for this brand.')
+      error.statusCode = 404
+      throw error
     }
 
     const productContext = products.slice(0, 20).map(product => ({
@@ -422,7 +423,7 @@ const generateQuestionFlow = async (req, res) => {
     )).slice(0, 10)
 
     const questionsPrompt = `
-You are building reusable quiz questions for ${req.brand.name}.
+You are building reusable quiz questions for ${brand.name}.
 
 BRAND CATEGORY: ${category}
 
@@ -682,16 +683,23 @@ The example above shows the object shape only. Your real response must include e
 
     if (saveError) throw saveError
 
-    res.json({
+    return {
       success: true,
       flow: savedFlow,
       fallback_used: usedFallback,
       fallback_reason: fallbackReason,
       ai_usage: aiUsage
-    })
+    }
+}
+
+const generateQuestionFlow = async (req, res) => {
+  try {
+    const category = req.body.category || req.body.brand_category || req.brand.product_category || 'general'
+    const result = await generateQuestionFlowForBrand(req.brand, category)
+    res.json(result)
   } catch (error) {
     console.error('Generate question flow error:', error)
-    res.status(500).json({ error: error.message })
+    res.status(error.statusCode || 500).json({ error: error.message })
   }
 }
 
@@ -851,6 +859,6 @@ Respond ONLY in this exact JSON format with no extra text:
   
 }
 
-module.exports = { getFixedQuestions, getActiveQuestionFlow, generateQuestionFlow, selectDynamicQuestions }
+module.exports = { getFixedQuestions, getActiveQuestionFlow, generateQuestionFlow, generateQuestionFlowForBrand, selectDynamicQuestions }
 
 
