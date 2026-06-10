@@ -359,18 +359,22 @@ const renderShopifyAppHome = (res, dashboard) => {
         --surface: #ffffff;
         --soft: #f6f7f8;
         --accent: #d9ff57;
+        --deep: #103f46;
+        --deep-2: #1f6269;
+        --success: #ccf6df;
+        --warning: #fff4d6;
       }
       body {
         margin: 0;
         padding: 0;
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
         color: var(--ink);
-        background: #fff;
+        background: #f4f6f3;
       }
       main {
-        max-width: 1240px;
+        max-width: 1180px;
         margin: 0 auto;
-        padding: 28px;
+        padding: 24px;
       }
       h1, h2, h3, p { margin-top: 0; }
       h1, h2, h3 {
@@ -481,6 +485,11 @@ const renderShopifyAppHome = (res, dashboard) => {
         text-decoration: none;
         font-weight: 750;
         cursor: pointer;
+        transition: transform .18s ease, box-shadow .18s ease, background .18s ease;
+      }
+      .button:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 12px 24px rgba(16, 17, 18, .12);
       }
       .button.secondary {
         color: var(--ink);
@@ -677,11 +686,14 @@ const renderShopifyAppHome = (res, dashboard) => {
       }
       .store-header {
         display: grid;
-        grid-template-columns: auto minmax(260px, 560px) auto;
+        grid-template-columns: auto minmax(260px, 1fr) auto;
         gap: 24px;
         align-items: center;
-        padding-bottom: 18px;
-        border-bottom: 1px solid var(--line);
+        padding: 18px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: rgba(255,255,255,.88);
+        box-shadow: 0 14px 40px rgba(18, 57, 67, .08);
       }
       .store-brand {
         display: inline-flex;
@@ -700,11 +712,41 @@ const renderShopifyAppHome = (res, dashboard) => {
         color: #747980;
         background: #fff;
       }
+      .setup-strip {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 12px;
+        margin-top: 14px;
+      }
+      .setup-stat {
+        min-height: 86px;
+        padding: 16px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: #fff;
+      }
+      .setup-stat span {
+        display: block;
+        margin-bottom: 7px;
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 750;
+        text-transform: uppercase;
+      }
+      .setup-stat strong {
+        display: block;
+        color: var(--ink);
+        font-size: 22px;
+        line-height: 1.1;
+      }
+      .setup-stat.ready strong {
+        color: #08724d;
+      }
       .listing {
         display: grid;
-        grid-template-columns: 300px minmax(0, 1fr);
-        gap: 46px;
-        padding-top: 28px;
+        grid-template-columns: 290px minmax(0, 1fr);
+        gap: 28px;
+        padding-top: 24px;
       }
       .listing-sidebar {
         position: sticky;
@@ -712,26 +754,30 @@ const renderShopifyAppHome = (res, dashboard) => {
         align-self: start;
       }
       .app-card {
-        padding: 0;
+        padding: 20px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: #fff;
+        box-shadow: 0 14px 40px rgba(18, 57, 67, .07);
       }
       .app-head {
         display: grid;
-        grid-template-columns: 64px minmax(0, 1fr);
+        grid-template-columns: 54px minmax(0, 1fr);
         gap: 14px;
         align-items: center;
-        padding-bottom: 26px;
+        padding-bottom: 18px;
         border-bottom: 1px solid var(--line);
       }
       .app-logo-lg {
         display: grid;
         place-items: center;
-        width: 64px;
-        height: 64px;
+        width: 54px;
+        height: 54px;
         border-radius: 8px;
         color: #fff;
-        background: #123943;
+        background: var(--deep);
         font-weight: 900;
-        font-size: 22px;
+        font-size: 19px;
       }
       .app-head h1 {
         margin: 0;
@@ -739,7 +785,7 @@ const renderShopifyAppHome = (res, dashboard) => {
         line-height: 1.18;
       }
       .info-block {
-        padding: 22px 0;
+        padding: 18px 0;
         border-bottom: 1px solid var(--line);
       }
       .info-block:last-child {
@@ -753,11 +799,11 @@ const renderShopifyAppHome = (res, dashboard) => {
       }
       .install-button {
         width: 100%;
-        min-height: 58px;
+        min-height: 52px;
         margin: 8px 0 18px;
         border-radius: 999px;
         background: #111;
-        font-size: 18px;
+        font-size: 15px;
       }
       .demo-link {
         display: block;
@@ -767,14 +813,17 @@ const renderShopifyAppHome = (res, dashboard) => {
       }
       .media-grid {
         display: grid;
-        grid-template-columns: minmax(0, 1fr) 250px;
+        grid-template-columns: minmax(0, 1fr) 230px;
         gap: 14px;
       }
       .media-main {
-        min-height: 456px;
-        padding: 28px;
+        min-height: 420px;
+        padding: 22px;
         border-radius: 8px;
-        background: #123943;
+        background:
+          linear-gradient(135deg, rgba(217,255,87,.18), transparent 28%),
+          linear-gradient(160deg, var(--deep), #0f3037 78%);
+        box-shadow: inset 0 1px 0 rgba(255,255,255,.12);
       }
       .media-collage {
         display: grid;
@@ -783,11 +832,17 @@ const renderShopifyAppHome = (res, dashboard) => {
         height: 100%;
       }
       .shot {
-        min-height: 128px;
+        min-height: 118px;
         padding: 16px;
         border-radius: 8px;
         background: #fff;
         color: #162329;
+        box-shadow: 0 10px 26px rgba(0,0,0,.12);
+      }
+      .shot strong {
+        display: block;
+        font-size: 20px;
+        line-height: 1.15;
       }
       .shot.wide {
         grid-column: span 2;
@@ -799,12 +854,13 @@ const renderShopifyAppHome = (res, dashboard) => {
         display: grid;
         place-items: center;
         background: #ff9b84;
-        color: #123943;
-        font-size: 42px;
+        color: var(--deep);
+        font-size: 22px;
         font-weight: 900;
+        text-align: center;
       }
       .shot.dark-shot {
-        background: #1c5560;
+        background: var(--deep-2);
         color: #fff;
       }
       .shot.accent-shot {
@@ -815,10 +871,10 @@ const renderShopifyAppHome = (res, dashboard) => {
         gap: 14px;
       }
       .thumb {
-        min-height: 138px;
+        min-height: 130px;
         padding: 14px;
         border-radius: 8px;
-        background: #123943;
+        background: var(--deep);
         color: #fff;
       }
       .thumb.muted {
@@ -827,34 +883,44 @@ const renderShopifyAppHome = (res, dashboard) => {
       }
       .listing-title {
         max-width: 940px;
-        margin: 28px 0 18px;
-        font-size: 25px;
+        margin: 24px 0 10px;
+        font-size: 24px;
         line-height: 1.18;
       }
       .listing-copy {
         max-width: 940px;
         color: #4b5056;
-        font-size: 17px;
+        font-size: 15px;
       }
       .feature-list {
         display: grid;
-        gap: 10px;
+        gap: 8px;
         max-width: 900px;
-        margin: 22px 0 0;
+        margin: 18px 0 0;
         padding-left: 22px;
         color: #353a40;
-        font-size: 16px;
+        font-size: 14px;
         line-height: 1.45;
       }
       .admin-tools {
         display: grid;
         grid-template-columns: repeat(3, minmax(0, 1fr));
         gap: 14px;
-        margin-top: 28px;
+        margin-top: 24px;
+      }
+      .panel {
+        min-height: 232px;
+        box-shadow: 0 12px 32px rgba(18, 57, 67, .06);
+      }
+      .panel h2 {
+        font-size: 18px;
+      }
+      .panel p {
+        font-size: 14px;
       }
       @media (max-width: 800px) {
         main { padding: 18px; }
-        .topbar, .hero, .layout, .metrics, .two-col, .preview-grid, .store-header, .listing, .media-grid, .media-collage, .admin-tools { grid-template-columns: 1fr; }
+        .topbar, .hero, .layout, .metrics, .two-col, .preview-grid, .store-header, .setup-strip, .listing, .media-grid, .media-collage, .admin-tools { grid-template-columns: 1fr; }
         .hero-copy { padding: 10px 0; }
         .preview { min-height: auto; }
         .sidebar, .listing-sidebar { position: static; }
@@ -872,11 +938,30 @@ const renderShopifyAppHome = (res, dashboard) => {
       <header class="store-header">
         <div class="store-brand">
           <div class="app-logo-lg">AM</div>
-          <span>AlphaMark App Store</span>
+          <span>AlphaMark AI Console</span>
         </div>
-        <div class="search-box">Search apps, guides, and more</div>
+        <div class="search-box">Catalog synced, quiz generated, storefront advisor ready</div>
         <span class="status">Connected</span>
       </header>
+
+      <section class="setup-strip">
+        <div class="setup-stat">
+          <span>Store</span>
+          <strong>${escapeHtml(shopSlug(shop))}</strong>
+        </div>
+        <div class="setup-stat">
+          <span>Catalog</span>
+          <strong>${Number(productCount || 0)} products</strong>
+        </div>
+        <div class="setup-stat">
+          <span>Question flows</span>
+          <strong>${Number(flowCount || 0)} active</strong>
+        </div>
+        <div class="setup-stat ready">
+          <span>Widget status</span>
+          <strong>${escapeHtml(activeFlowLabel)}</strong>
+        </div>
+      </section>
 
       <section class="listing">
         <aside class="listing-sidebar">
@@ -925,9 +1010,9 @@ const renderShopifyAppHome = (res, dashboard) => {
                 </div>
                 <div class="shot dark-shot tall">
                   <h3>AI advisor</h3>
-                  <p style="color: inherit;">Personalized quiz and photo-aware product matching.</p>
+                  <p style="color: inherit;">Personalized quiz, catalog matching, and optional photo context.</p>
                 </div>
-                <div class="shot brand-shot">alphamark</div>
+                <div class="shot brand-shot">Live match</div>
                 <div class="shot">
                   <h3>Product matching</h3>
                   <strong>${Number(flowCount || 0)} flows</strong>
@@ -955,8 +1040,8 @@ const renderShopifyAppHome = (res, dashboard) => {
             </div>
           </div>
 
-          <h2 class="listing-title">Boost conversions by turning customer preferences into AI-generated product recommendations.</h2>
-          <p class="listing-copy">AlphaMark helps Shopify brands launch a guided product advisor that collects customer preferences, uses brand-specific questions, analyzes optional photos, and recommends the most relevant products from the synced Shopify catalog.</p>
+          <h2 class="listing-title">Your AI product advisor is connected to this store.</h2>
+          <p class="listing-copy">AlphaMark uses this Shopify catalog, brand category, generated question flow, and optional shopper photo context to recommend relevant products from the store.</p>
 
           <ul class="feature-list">
             <li>Sync products from Shopify and use real catalog data in the recommendation engine.</li>
@@ -969,11 +1054,11 @@ const renderShopifyAppHome = (res, dashboard) => {
           <div class="admin-tools">
             <section class="panel">
               <h2>Shopify products</h2>
-              <p>Import this store's Shopify catalog into AlphaMark.</p>
+              <p>Refresh the catalog and rebuild the question flow from current SKUs.</p>
               <form class="settings" method="post" action="/shopify/products/sync">
                 <input type="hidden" name="shop" value="${escapeHtml(shop)}">
                 <input type="hidden" name="token" value="${escapeHtml(syncToken)}">
-                <button class="button brand" type="submit">Sync products</button>
+                <button class="button brand" type="submit">Sync catalog</button>
               </form>
             </section>
 
@@ -999,11 +1084,11 @@ const renderShopifyAppHome = (res, dashboard) => {
               <div class="steps">
                 <div class="step">
                   <span class="dot">1</span>
-                  <p>Sync Shopify products.</p>
+                  <p>Sync Shopify products and generate the shopper quiz.</p>
                 </div>
                 <div class="step">
                   <span class="dot">2</span>
-                  <p>Verify the <code>${escapeHtml(category)}</code> question flow.</p>
+                  <p>Check the <code>${escapeHtml(category)}</code> flow in Supabase if needed.</p>
                 </div>
                 <div class="step">
                   <span class="dot">3</span>
