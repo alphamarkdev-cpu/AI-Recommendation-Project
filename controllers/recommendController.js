@@ -366,9 +366,13 @@ Respond ONLY in this exact JSON â€” no markdown, no extra text:
     })
 
   } catch (error) {
-    console.error('Recommendation error:', error)
-    res.status(500).json({ error: error.message })
-  }
+  console.error('RECOMMEND ERROR:', error)
+
+  res.status(500).json({
+    error: error.message,
+    stack: error.stack
+  })
+}
 }
 
 module.exports = { getRecommendation }
