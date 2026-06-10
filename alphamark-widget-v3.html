@@ -527,8 +527,11 @@ body{background:#f3f1ec;color:var(--text);overflow:hidden;}
 const WIDGET_PARAMS = new URLSearchParams(window.location.search)
 const EMBED_MODE = WIDGET_PARAMS.get('embed') === '1'
 const API   = WIDGET_PARAMS.get('api_url') || window.location.origin
-const AKEY  = WIDGET_PARAMS.get('brand_key') || 'test-api-key-001'
-const BCAT  = WIDGET_PARAMS.get('brand_category') || 'general'
+const SHOP  = WIDGET_PARAMS.get('shop') || WIDGET_PARAMS.get('shop_domain') || ''
+let AKEY  = WIDGET_PARAMS.get('brand_key') || ''
+let BCAT  = WIDGET_PARAMS.get('brand_category') || 'general'
+
+if(AKEY === 'test-api-key-001') AKEY = ''
 
 if(EMBED_MODE) document.body.classList.add('embed-mode')
 
@@ -593,6 +596,12 @@ async function loadQuestions(){
   document.getElementById('q-wrap').innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:100%;flex-direction:column;gap:12px;color:var(--text3);font-size:13px;"><div class="load-ring" style="width:36px;height:36px;border-width:2px;"></div>Loading your questionnaire...</div>`
 
   try {
+    await resolveWidgetBrandConfig()
+    if(!AKEY) {
+      showFallback()
+      return
+    }
+
     // Fetch the pre-generated flow so the session does not need an AI question-selection call.
     const flowRes = await fetch(`${API}/api/questions/flow?category=${encodeURIComponent(BCAT)}`, {
       headers: { 'x-api-key': AKEY }
@@ -623,6 +632,20 @@ async function loadQuestions(){
   } catch(e){
     console.warn('Stored flow load failed. Falling back to legacy question loading.', e)
     await loadLegacyQuestions()
+  }
+}
+
+// Resolves the brand API key when the widget is opened with a Shopify shop domain instead of a key.
+async function resolveWidgetBrandConfig(){
+  if(AKEY || !SHOP) return
+
+  const response = await fetch(`${API}/api/shopify/brand-config?shop=${encodeURIComponent(SHOP)}`)
+  const data = await response.json()
+
+  if(data.success){
+    AKEY = data.brand_key || ''
+    BCAT = data.brand_category || BCAT
+    document.getElementById('st2').innerText = categoryLabel(BCAT)
   }
 }
 

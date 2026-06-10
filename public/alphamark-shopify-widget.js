@@ -1,7 +1,9 @@
 (function () {
   const script = document.currentScript
   const apiUrl = (script?.dataset.apiUrl || new URL(script.src).origin).replace(/\/$/, '')
-  const configuredBrandKey = script?.dataset.brandKey || ''
+  const configuredBrandKey = script?.dataset.brandKey === 'test-api-key-001'
+    ? ''
+    : script?.dataset.brandKey || ''
   const shopDomain = script?.dataset.shopDomain || window.Shopify?.shop || ''
   let brandKey = configuredBrandKey
   let category = script?.dataset.category || 'general'
