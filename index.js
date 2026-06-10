@@ -17,6 +17,10 @@ const path = require('path')
 const app = express()
 
 app.use(cors())
+app.use((req, res, next) => {
+  req.traceId = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
+  next()
+})
 app.post(
   '/webhooks/app/uninstalled',
   express.raw({ type: 'application/json' }),
@@ -96,14 +100,35 @@ app.get('/test-fixed-questions', async (req, res) => {
   res.json({ total: data.length, questions: data })
 })
 
-app.get('/', (req, res) => {
-  res.send('AlphaMark Backend Running Successfully');
-});
+app.use((err, req, res, next) => {
+  const status = err.statusCode || err.status || 500
+  const traceId = req.traceId || 'no-trace'
+  const details = process.env.NODE_ENV === 'production'
+    ? undefined
+    : err.stack
+
+  console.error('Unhandled request error:', {
+    traceId,
+    method: req.method,
+    path: req.originalUrl,
+    status,
+    message: err.message,
+    stack: err.stack
+  })
+
+  if (res.headersSent) return next(err)
+
+  res.status(status).json({
+    success: false,
+    error: err.message || 'Internal server error',
+    trace_id: traceId,
+    details
+  })
+})
 
 const PORT = process.env.PORT || 3000
 // Starts the Express server on the configured port.
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`)
 })
-
 

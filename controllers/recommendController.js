@@ -366,15 +366,21 @@ Respond ONLY in this exact JSON â€” no markdown, no extra text:
     })
 
   } catch (error) {
-  console.error('RECOMMEND ERROR:', error)
+    const traceId = req.traceId || `${Date.now().toString(36)}-recommend`
+    console.error('Recommendation error:', {
+      traceId,
+      message: error.message,
+      stack: error.stack
+    })
 
-  res.status(500).json({
-    error: error.message,
-    stack: error.stack
-  })
-}
+    res.status(500).json({
+      success: false,
+      error: error.message,
+      trace_id: traceId,
+      details: process.env.NODE_ENV === 'production' ? undefined : error.stack
+    })
+  }
 }
 
 module.exports = { getRecommendation }
-
 
