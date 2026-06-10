@@ -44,10 +44,10 @@ const getMatchingProducts = async (brandId, profileTypes, concerns) => {
 
     // filter by product match tags — works for all categories
     let filtered = data.filter(product =>
-      product.product_match_tags.some(tag =>
+      (product.product_match_tags || []).some(tag =>
         concerns.some(c =>
-          tag.match_tag.toLowerCase().includes(c.toLowerCase()) ||
-          c.toLowerCase().includes(tag.match_tag.toLowerCase())
+          String(tag.match_tag || '').toLowerCase().includes(String(c || '').toLowerCase()) ||
+          String(c || '').toLowerCase().includes(String(tag.match_tag || '').toLowerCase())
         )
       )
     )
@@ -76,11 +76,13 @@ const getMatchingProducts = async (brandId, profileTypes, concerns) => {
 
     // sort by priority score descending
     const sorted = filtered.sort((a, b) => {
-      const aScore = a.product_match_tags.length > 0
-        ? Math.max(...a.product_match_tags.map(t => t.priority_score || 0))
+      const aTags = a.product_match_tags || []
+      const bTags = b.product_match_tags || []
+      const aScore = aTags.length > 0
+        ? Math.max(...aTags.map(t => t.priority_score || 0))
         : 0
-      const bScore = b.product_match_tags.length > 0
-        ? Math.max(...b.product_match_tags.map(t => t.priority_score || 0))
+      const bScore = bTags.length > 0
+        ? Math.max(...bTags.map(t => t.priority_score || 0))
         : 0
       return bScore - aScore
     })

@@ -1153,7 +1153,15 @@ async function analyse(){
       headers:{'Content-Type':'application/json','x-api-key':AKEY},
       body:JSON.stringify(payload)
     })
-    const data=await res.json()
+    const raw = await res.text()
+    let data = {}
+    try { data = raw ? JSON.parse(raw) : {} } catch(e) { data = { error: raw || `Request failed with status ${res.status}` } }
+
+    if(!res.ok){
+      showError(data.error || `Recommendation request failed with status ${res.status}`)
+      return
+    }
+
     if(data.success && data.needs_clarification){
       tokenUsage.recommendation = data.ai_usage || null
       showClarificationQuestions(data.clarification_questions || [], data.clarification_reason)
@@ -1166,7 +1174,7 @@ async function analyse(){
     else if(data.photo_verification?.blocked) showPhotoMismatchError(data.error)
     else showError(data.error)
   } catch(e){
-    showError('Could not connect to server. Make sure your backend is running on localhost:3000')
+    showError(`Could not connect to recommendation server at ${API}.`)
   }
 }
 

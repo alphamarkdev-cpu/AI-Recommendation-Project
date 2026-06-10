@@ -6,6 +6,8 @@ require('dotenv').config()
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY)
 
+const asArray = value => Array.isArray(value) ? value : []
+
 // Converts a browser data URL image into Gemini's inlineData shape.
 const parseDataUrlImage = dataUrl => {
   if (!dataUrl || typeof dataUrl !== 'string') return null
@@ -91,6 +93,10 @@ const getRecommendation = async (req, res) => {
     const brandName = req.brand.name
     const brandCategory = req.brand.product_category || req.brand.category || 'general'
 
+    if (!process.env.GEMINI_API_KEY) {
+      return res.status(500).json({ error: 'GEMINI_API_KEY is not configured on this deployment.' })
+    }
+
     const profileInput = profile_type || skin_type
     const durationInput = concern_duration || acne_duration
     const profileTypes = Array.isArray(profileInput) ? profileInput : [profileInput]
@@ -128,8 +134,8 @@ const getRecommendation = async (req, res) => {
       how_to_use:          p.how_to_use,
       price:               p.price,
       suitable_customer_attributes: p.suitable_customer_attributes,
-      match_tags:          p.product_match_tags.map(t => `${t.match_tag} (intensity ${t.intensity_level}, priority ${t.priority_score})`),
-      key_components:      p.product_components.map(i => i.name)
+      match_tags:          asArray(p.product_match_tags).map(t => `${t.match_tag} (intensity ${t.intensity_level}, priority ${t.priority_score})`),
+      key_components:      asArray(p.product_components).map(i => i.name)
     }))
 
     // . Step 3: Build product image + URL maps to send back to frontend .
