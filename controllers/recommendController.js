@@ -22,68 +22,6 @@ const parseGeminiJson = text => {
   }
 }
 
-const buildFallbackRecommendation = ({ matchingProducts, brandCategory, profileTypes, concernsList, budget }) => {
-  const selected = matchingProducts.slice(0, 4)
-  const routineItems = selected.map((product, index) => ({
-    step: index + 1,
-    product_name: product.name,
-    category: product.category,
-    time_to_apply: product.recommended_timing || 'When needed',
-    how_to_use: product.how_to_use || 'Use as directed by the brand.',
-    why_chosen: `This matches your ${concernsList.filter(Boolean).join(', ') || brandCategory} requirement from the available catalog.`,
-    price: Number(product.price || 0)
-  }))
-
-  const morning = routineItems.filter((_, index) => index % 2 === 0)
-  const evening = routineItems.filter((_, index) => index % 2 === 1)
-
-  return {
-    photo_verification: {
-      blocked: false,
-      is_relevant: true,
-      detected_subject: 'No photo analysis used',
-      message: null
-    },
-    recommendation_basis: 'text_answers',
-    basis_explanation: 'This recommendation is based on your answers and the products available in this brand catalog.',
-    clarification_required: false,
-    clarification_reason: null,
-    clarification_questions: [],
-    skin_assessment: `You are looking for a ${brandCategory} match around ${concernsList.filter(Boolean).join(', ') || profileTypes.filter(Boolean).join(', ') || 'your selected needs'}. These products are the closest catalog matches${budget ? ` within your ${budget} budget preference` : ''}.`,
-    concern_level: 'Moderate',
-    morning_routine: morning.length ? morning : routineItems.slice(0, 1),
-    evening_routine: evening.length ? evening : routineItems.slice(1, 3),
-    tips: [
-      'Start with the product that best matches your main goal.',
-      'Avoid products that conflict with your stated restrictions.',
-      'Compare the recommended products by benefit, price, and usage fit.'
-    ],
-    lifestyle_recommendations: [
-      {
-        title: 'Start simple',
-        action: 'Use one recommended product first before adding more.',
-        reason: 'A simple start makes it easier to judge what works.'
-      },
-      {
-        title: 'Match timing',
-        action: 'Use each product at the time suggested by the brand.',
-        reason: 'Consistent timing improves the chance of a good result.'
-      },
-      {
-        title: 'Track response',
-        action: 'Notice comfort, fit, or results over the first few uses.',
-        reason: 'Your feedback helps refine future choices.'
-      },
-      {
-        title: 'Check budget',
-        action: 'Prioritize the top match if you want to buy only one item.',
-        reason: 'This keeps the recommendation practical.'
-      }
-    ],
-    warning: null
-  }
-}
-
 // Converts a browser data URL image into Gemini's inlineData shape.
 const parseDataUrlImage = dataUrl => {
   if (!dataUrl || typeof dataUrl !== 'string') return null
@@ -336,46 +274,22 @@ Respond ONLY in this exact JSON â€” no markdown, no extra text:
 }
 `
 
-    // Step 5: Call Gemini, with a catalog-only fallback if AI output fails.
-    let recommendation
-    let aiUsage = null
-
-    try {
-      const model  = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' })
-      const request = photoImage
-        ? [
-            { text: prompt },
-            {
-              inlineData: {
-                mimeType: photoImage.mimeType,
-                data: photoImage.data
-              }
+    // Step 5: Call Gemini
+    const model  = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' })
+    const request = photoImage
+      ? [
+          { text: prompt },
+          {
+            inlineData: {
+              mimeType: photoImage.mimeType,
+              data: photoImage.data
             }
-          ]
-        : prompt
-      const result = await model.generateContent(request)
-      aiUsage = formatGeminiUsage(result.response.usageMetadata)
-      recommendation = parseGeminiJson(result.response.text())
-    } catch (aiError) {
-      console.error('Gemini recommendation failed. Returning catalog fallback:', aiError)
-      recommendation = buildFallbackRecommendation({
-        matchingProducts,
-        brandCategory,
-        profileTypes,
-        concernsList,
-        budget
-      })
-      aiUsage = {
-        input_tokens: 0,
-        output_tokens: 0,
-        thinking_tokens: 0,
-        other_tokens: 0,
-        total_tokens: 0,
-        cached_tokens: 0,
-        fallback_used: true,
-        fallback_reason: aiError.message
-      }
-    }
+          }
+        ]
+      : prompt
+    const result = await model.generateContent(request)
+    const aiUsage = formatGeminiUsage(result.response.usageMetadata)
+    const recommendation = parseGeminiJson(result.response.text())
 
     if (photoImage && recommendation.photo_verification?.blocked) {
       return res.status(422).json({
