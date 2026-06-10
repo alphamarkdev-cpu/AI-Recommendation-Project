@@ -41,6 +41,79 @@ const emptyUsage = {
 const GENERATED_QUESTION_COUNT = 14
 const MIN_GENERATED_QUESTIONS = 12
 const MIN_BRANCHING_NODES = 4
+const GENERIC_CATALOG_SIGNAL_PATTERNS = [
+  /^all$/i,
+  /^shop all$/i,
+  /^all collection$/i,
+  /^hidden[_\s-]*product$/i,
+  /^general$/i,
+  /^taupe/i,
+  /collection/i,
+  /^new$/i,
+  /^best sellers?$/i,
+  /^featured$/i,
+  /^homepage$/i,
+  /^sale$/i
+]
+
+const cleanCatalogSignal = value => {
+  const signal = String(value || '')
+    .replace(/[_-]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+
+  if (!signal || signal.length < 3) return null
+  if (GENERIC_CATALOG_SIGNAL_PATTERNS.some(pattern => pattern.test(signal))) return null
+
+  return signal
+}
+
+const uniqueCleanSignals = values => Array.from(new Set(
+  values
+    .map(cleanCatalogSignal)
+    .filter(Boolean)
+))
+
+const categoryIncludes = (category, terms) => {
+  const normalized = String(category || '').toLowerCase()
+  return terms.some(term => normalized.includes(term))
+}
+
+const categoryFallbackGoals = category => {
+  if (categoryIncludes(category, ['skin', 'beauty', 'cosmetic'])) {
+    return ['Hydration', 'Acne or breakouts', 'Oil control', 'Glow and dullness', 'Sensitivity', 'Anti-aging']
+  }
+
+  if (categoryIncludes(category, ['hair', 'scalp', 'shampoo'])) {
+    return ['Hair fall', 'Dandruff or scalp care', 'Frizz control', 'Damage repair', 'Volume', 'Smooth styling']
+  }
+
+  if (categoryIncludes(category, ['supplement', 'wellness', 'nutrition'])) {
+    return ['Energy support', 'Immunity', 'Sleep and stress', 'Hair or skin support', 'Joint health', 'Daily wellness']
+  }
+
+  if (categoryIncludes(category, ['accessor', 'fashion', 'apparel'])) {
+    return ['Everyday style', 'Office or formal wear', 'Gift purchase', 'Premium look', 'Comfort fit', 'Best value']
+  }
+
+  if (categoryIncludes(category, ['electronic', 'gadget', 'device'])) {
+    return ['Work or productivity', 'Entertainment', 'Travel use', 'Compatibility need', 'Premium features', 'Best value']
+  }
+
+  return ['Everyday use', 'Gift purchase', 'Premium option', 'Best value', 'Specific need', 'Not sure']
+}
+
+const categoryFallbackProfileOptions = category => {
+  if (categoryIncludes(category, ['skin', 'beauty', 'cosmetic'])) {
+    return ['Dry skin', 'Oily skin', 'Combination skin', 'Sensitive skin', 'Not sure']
+  }
+
+  if (categoryIncludes(category, ['hair', 'scalp', 'shampoo'])) {
+    return ['Dry hair', 'Oily scalp', 'Frizzy hair', 'Damaged hair', 'Not sure']
+  }
+
+  return ['Minimal and practical', 'Premium-focused', 'Trend-led', 'Value-focused', 'Not sure']
+}
 
 // Parses Gemini JSON output, including responses wrapped in markdown code fences.
 const parseJsonResponse = text => {
@@ -141,18 +214,20 @@ const buildFallbackFlow = (category, products) => {
   const typeSet = new Set()
 
   products.forEach(product => {
-    ;(product.product_match_tags || []).forEach(tag => {
-      if (tag.match_tag) concernSet.add(tag.match_tag)
-    })
-    ;(product.suitable_customer_attributes || []).forEach(type => {
-      if (type) typeSet.add(type)
-    })
+    uniqueCleanSignals([
+      product.category,
+      ...(product.product_tags || []),
+      ...(product.product_match_tags || []).map(tag => tag.match_tag)
+    ]).forEach(signal => concernSet.add(signal))
+
+    uniqueCleanSignals(product.suitable_customer_attributes || [])
+      .forEach(type => typeSet.add(type))
   })
 
   const concernOptions = Array.from(concernSet).slice(0, 8)
   const typeOptions = Array.from(typeSet).slice(0, 6)
-  const concerns = concernOptions.length ? concernOptions : ['Everyday use', 'Gift purchase', 'Style upgrade', 'Best value']
-  const types = typeOptions.length ? typeOptions : ['Beginner', 'Regular user', 'Advanced user', 'Not sure']
+  const concerns = concernOptions.length >= 4 ? concernOptions : categoryFallbackGoals(category)
+  const types = typeOptions.length >= 3 ? typeOptions : categoryFallbackProfileOptions(category)
 
   const questions_json = [
     { question_id: 'q1', field_key: 'primary_concern', question_text: 'What are you shopping for today?', sub_text: 'Choose the closest goal so we can narrow the catalog.', input_type: 'chips', options_json: concerns, category, section_label: 'Assessment' },
@@ -417,13 +492,13 @@ const generateQuestionFlowForBrand = async (brand, requestedCategory) => {
 
     const productContext = products.slice(0, 20).map(product => ({
       name: product.name,
-      category: product.category,
+      category: cleanCatalogSignal(product.category) || product.category,
       price: product.price,
-      vendor: product.vendor,
-      product_tags: product.product_tags || [],
+      vendor: cleanCatalogSignal(product.vendor) || product.vendor,
+      product_tags: uniqueCleanSignals(product.product_tags || []),
       description: String(product.description || '').slice(0, 220),
-      suitable_customer_attributes: product.suitable_customer_attributes,
-      match_tags: product.product_match_tags.map(tag => tag.match_tag)
+      suitable_customer_attributes: uniqueCleanSignals(product.suitable_customer_attributes || []),
+      match_tags: uniqueCleanSignals(product.product_match_tags.map(tag => tag.match_tag))
     }))
     const catalogueSignals = Array.from(new Set(
       products.flatMap(product => [
@@ -431,7 +506,9 @@ const generateQuestionFlowForBrand = async (brand, requestedCategory) => {
         ...(product.product_tags || []),
         ...(product.suitable_customer_attributes || []),
         ...(product.product_match_tags || []).map(tag => tag.match_tag)
-      ].filter(Boolean))
+      ])
+        .map(cleanCatalogSignal)
+        .filter(Boolean)
     )).slice(0, 10)
 
     const questionsPrompt = `
@@ -445,7 +522,7 @@ ${JSON.stringify(productContext, null, 2)}
 CATALOG SIGNALS FROM PRODUCTS:
 ${JSON.stringify(catalogueSignals)}
 
-Create a reusable routed question bank that helps a shopper decide what to buy from this exact catalog without calling AI during the quiz session.
+Create a reusable routed question bank that helps a Consumer decide what to buy from this exact catalog without calling AI during the quiz session.
 
 IMPORTANT INTENT:
 - This is not a medical/diagnosis quiz unless the brand category clearly requires it.
@@ -453,6 +530,7 @@ IMPORTANT INTENT:
 - Questions must be grounded in the actual SKU variety above: product categories, tags, descriptions, prices, attributes, components/materials, and match tags.
 - Imagine the shopper is confused by many SKUs and clicked "Find my choice". Ask only questions that help narrow those SKUs to the right products.
 - Adapt the question themes to the brand category and catalog. For example, hair care may need hair type, scalp concern, styling goal, wash frequency, ingredient restrictions, and routine effort; accessories may need occasion, style, material, color, gifting/self-use, and fit; electronics may need device compatibility, use case, feature priority, and budget; supplements may need wellness goal, diet restrictions, format preference, and routine timing. These are examples only: choose the dimensions that actually separate this brand's SKUs.
+- Do not expose Shopify admin, merchandising, or collection labels as shopper answers. Avoid options like "hidden product", "all", "shop all", "all collection", brand names, or other labels that do not describe a real customer need.
 
 COUNT AND COVERAGE RULES:
 - Generate exactly ${GENERATED_QUESTION_COUNT} question objects in questions_json.
@@ -884,5 +962,3 @@ Respond ONLY in this exact JSON format with no extra text:
 }
 
 module.exports = { getFixedQuestions, getActiveQuestionFlow, generateQuestionFlow, generateQuestionFlowForBrand, selectDynamicQuestions }
-
-

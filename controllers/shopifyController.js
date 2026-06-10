@@ -159,6 +159,25 @@ const parseShopifyTags = tags => String(tags || '')
   .filter(Boolean)
   .filter((tag, index, all) => all.findIndex(item => item.toLowerCase() === tag.toLowerCase()) === index)
 
+const GENERIC_SHOPIFY_TAG_PATTERNS = [
+  /^all$/i,
+  /^shop all$/i,
+  /^all collection$/i,
+  /^hidden[_\s-]*product$/i,
+  /^general$/i,
+  /collection/i,
+  /^new$/i,
+  /^best sellers?$/i,
+  /^featured$/i,
+  /^homepage$/i,
+  /^sale$/i
+]
+
+const isUsefulShopifyTag = tag => {
+  const value = String(tag || '').replace(/[_-]+/g, ' ').trim()
+  return value.length >= 3 && !GENERIC_SHOPIFY_TAG_PATTERNS.some(pattern => pattern.test(value))
+}
+
 const parseLinkHeader = linkHeader => {
   if (!linkHeader) return null
 
@@ -194,7 +213,7 @@ const shopifyProductUrl = (shop, product) => (
 )
 
 const buildProductPayload = (shop, brand, product) => {
-  const tags = parseShopifyTags(product.tags)
+  const tags = parseShopifyTags(product.tags).filter(isUsefulShopifyTag)
   const firstVariant = product.variants?.[0]
   const price = Number(firstVariant?.price || 0)
   const imageUrl = product.image?.src || product.images?.[0]?.src || null
@@ -245,7 +264,7 @@ const ensureProductMatchTags = async (productId, product, payload) => {
   if (countError) throw countError
   if (count) return
 
-  const tags = parseShopifyTags(product.tags)
+  const tags = parseShopifyTags(product.tags).filter(isUsefulShopifyTag)
   const concerns = [
     ...tags,
     product.product_type,
