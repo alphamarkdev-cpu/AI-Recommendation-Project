@@ -151,17 +151,17 @@ const buildFallbackFlow = (category, products) => {
 
   const concernOptions = Array.from(concernSet).slice(0, 8)
   const typeOptions = Array.from(typeSet).slice(0, 6)
-  const concerns = concernOptions.length ? concernOptions : ['Quality', 'Fit', 'Performance', 'Value']
+  const concerns = concernOptions.length ? concernOptions : ['Everyday use', 'Gift purchase', 'Style upgrade', 'Best value']
   const types = typeOptions.length ? typeOptions : ['Beginner', 'Regular user', 'Advanced user', 'Not sure']
 
   const questions_json = [
-    { question_id: 'q1', field_key: 'primary_concern', question_text: 'What is your main concern right now?', sub_text: 'Choose the closest match so we can route your assessment.', input_type: 'chips', options_json: concerns, category, section_label: 'Assessment' },
-    { question_id: 'q2', field_key: 'profile_type', question_text: 'Which option describes you best?', sub_text: 'This helps us match products to your needs and preferences.', input_type: 'cards', options_json: types.map(type => ({ label: type, emoji: '', sub: '' })), category, section_label: 'Assessment' },
-    { question_id: 'q3', field_key: 'concern_severity', question_text: 'How intense is this concern currently?', sub_text: 'Use 1 for mild and 5 for very intense.', input_type: 'scale', options_json: [1, 2, 3, 4, 5], category, section_label: 'Assessment' },
-    { question_id: 'q4', field_key: 'concern_duration', question_text: 'How long has this concern been present?', sub_text: 'A rough estimate is enough.', input_type: 'chips', options_json: ['Less than 1 month', '1-3 months', '3-6 months', 'More than 6 months'], category, section_label: 'Assessment' },
-    { question_id: 'q5', field_key: 'known_triggers', question_text: 'What usually triggers or worsens it?', sub_text: 'Choose the strongest trigger.', input_type: 'chips', options_json: ['Stress', 'Sleep', 'Diet', 'Weather', 'Products', 'Not sure'], category, section_label: 'Assessment' },
-    { question_id: 'q6', field_key: 'previous_products', question_text: 'Have you already tried anything for this?', sub_text: 'Mention products, services, or approaches you tried before.', input_type: 'text', options_json: { placeholder: 'Example: product names, routines, or what worked/did not work...' }, category, section_label: 'Assessment' },
-    { question_id: 'q7', field_key: 'allergies', question_text: 'Any allergies or ingredients you avoid?', sub_text: 'This helps us filter unsafe recommendations.', input_type: 'text', options_json: { placeholder: 'Write none if there are no known allergies' }, category, section_label: 'Assessment' },
+    { question_id: 'q1', field_key: 'primary_concern', question_text: 'What are you shopping for today?', sub_text: 'Choose the closest goal so we can narrow the catalog.', input_type: 'chips', options_json: concerns, category, section_label: 'Assessment' },
+    { question_id: 'q2', field_key: 'profile_type', question_text: 'Which option describes your buying style best?', sub_text: 'This helps us match products to your taste and confidence level.', input_type: 'cards', options_json: types.map(type => ({ label: type, emoji: '', sub: '' })), category, section_label: 'Assessment' },
+    { question_id: 'q3', field_key: 'priority_level', question_text: 'How important is getting the perfect match?', sub_text: 'Use 1 for flexible and 5 for very specific.', input_type: 'scale', options_json: [1, 2, 3, 4, 5], category, section_label: 'Assessment' },
+    { question_id: 'q4', field_key: 'purchase_timing', question_text: 'When do you plan to use or gift it?', sub_text: 'A rough timing helps us choose practical options.', input_type: 'chips', options_json: ['Immediately', 'This week', 'This month', 'Just exploring'], category, section_label: 'Assessment' },
+    { question_id: 'q5', field_key: 'selection_priority', question_text: 'What matters most in your choice?', sub_text: 'Pick the strongest deciding factor.', input_type: 'chips', options_json: ['Style', 'Comfort', 'Durability', 'Premium feel', 'Best value', 'Not sure'], category, section_label: 'Assessment' },
+    { question_id: 'q6', field_key: 'previous_products', question_text: 'Have you bought something similar before?', sub_text: 'Mention what you liked or did not like.', input_type: 'text', options_json: { placeholder: 'Example: product names, styles, or what worked/did not work...' }, category, section_label: 'Assessment' },
+    { question_id: 'q7', field_key: 'allergies', question_text: 'Any materials, ingredients, or styles you avoid?', sub_text: 'This helps us filter poor-fit recommendations.', input_type: 'text', options_json: { placeholder: 'Write none if there are no restrictions' }, category, section_label: 'Assessment' },
     { question_id: 'q8', field_key: 'budget', question_text: 'What budget range feels comfortable?', sub_text: 'We will keep recommendations practical.', input_type: 'chips', options_json: ['Under 500', '500-1000', '1000-2000', 'No strict budget'], category, section_label: 'Assessment' }
   ]
 
@@ -337,7 +337,7 @@ const assertGeneratedDecisionTree = flowJson => {
 
   const firstNode = flowJson.nodes?.q1
   if (!firstNode?.if || Object.keys(firstNode.if).length < 3) {
-    throw new Error('Gemini q1 must branch to at least 3 concern-specific paths.')
+    throw new Error('Gemini q1 must branch to at least 3 product-selection paths.')
   }
 }
 
@@ -398,6 +398,9 @@ const generateQuestionFlowForBrand = async (brand, requestedCategory) => {
         name,
         category,
         description,
+        price,
+        vendor,
+        product_tags,
         suitable_customer_attributes,
         product_components(name),
         product_match_tags(match_tag, intensity_level, priority_score)
@@ -415,39 +418,59 @@ const generateQuestionFlowForBrand = async (brand, requestedCategory) => {
     const productContext = products.slice(0, 20).map(product => ({
       name: product.name,
       category: product.category,
+      price: product.price,
+      vendor: product.vendor,
+      product_tags: product.product_tags || [],
+      description: String(product.description || '').slice(0, 220),
       suitable_customer_attributes: product.suitable_customer_attributes,
       match_tags: product.product_match_tags.map(tag => tag.match_tag)
     }))
-    const catalogueConcerns = Array.from(new Set(
-      products.flatMap(product => (product.product_match_tags || []).map(tag => tag.match_tag).filter(Boolean))
+    const catalogueSignals = Array.from(new Set(
+      products.flatMap(product => [
+        product.category,
+        ...(product.product_tags || []),
+        ...(product.suitable_customer_attributes || []),
+        ...(product.product_match_tags || []).map(tag => tag.match_tag)
+      ].filter(Boolean))
     )).slice(0, 10)
 
     const questionsPrompt = `
-You are building reusable quiz questions for ${brand.name}.
+You are building a reusable product-advisor quiz for ${brand.name}.
 
 BRAND CATEGORY: ${category}
 
-PRODUCTS AND CONCERNS:
+PRODUCT CATALOG SNAPSHOT:
 ${JSON.stringify(productContext, null, 2)}
 
-CATALOGUE CONCERNS:
-${JSON.stringify(catalogueConcerns)}
+CATALOG SIGNALS FROM PRODUCTS:
+${JSON.stringify(catalogueSignals)}
 
-Create a reusable routed question bank that can run without calling AI during the user's quiz session.
+Create a reusable routed question bank that helps a shopper decide what to buy from this exact catalog without calling AI during the quiz session.
+
+IMPORTANT INTENT:
+- This is not a medical/diagnosis quiz unless the brand category clearly requires it.
+- The quiz must discover the customer's choice, requirement, taste, use case, constraints, and buying intent.
+- Questions must be grounded in the actual SKU variety above: product categories, tags, descriptions, prices, attributes, components/materials, and match tags.
+- Imagine the shopper is confused by many SKUs and clicked "Find my choice". Ask only questions that help narrow those SKUs to the right products.
+- Adapt the question themes to the brand category and catalog. For example, hair care may need hair type, scalp concern, styling goal, wash frequency, ingredient restrictions, and routine effort; accessories may need occasion, style, material, color, gifting/self-use, and fit; electronics may need device compatibility, use case, feature priority, and budget; supplements may need wellness goal, diet restrictions, format preference, and routine timing. These are examples only: choose the dimensions that actually separate this brand's SKUs.
 
 COUNT AND COVERAGE RULES:
 - Generate exactly ${GENERATED_QUESTION_COUNT} question objects in questions_json.
 - Do not generate 2, 8, 10, or 18 questions. The response is invalid unless questions_json.length is exactly ${GENERATED_QUESTION_COUNT}.
-- q1 must ask the user's biggest concern and must use field_key "primary_concern".
-- q1 options must include at least 4 main concerns supported by the product catalogue.
-- q2-q10 must be concern-specific follow-up questions grouped across the main needs or concerns from q1.
-- q11-q14 must be shared final questions for allergies/avoided ingredients, previous treatments, routine habits, and budget.
+- q1 must ask the shopper's primary buying goal / requirement and must use field_key "primary_concern" for API compatibility.
+- q1 options must include at least 4 catalog-supported shopping goals, needs, occasions, use cases, styles, or product families.
+- q2-q10 must be follow-up questions for different q1 paths, based on product-fit signals present in the catalog.
+- q11-q14 must be shared final questions for purchase-fit details such as budget, preference constraints, gifting/self-use, avoided materials/ingredients, sizing/compatibility, or previous product experience when relevant.
 - Not every user should answer every question. The flow_json will later choose one relevant path.
 - Design the bank so a user path can contain 5 to 8 questions while the database stores all ${GENERATED_QUESTION_COUNT}.
 
 QUESTION CONTENT RULES:
-- Create different follow-up paths for the main needs, goals, concerns, use cases, preferences, constraints, or product-fit signals found in the product catalogue.
-- Include severity, duration, subtype, usage context, triggers, constraints, and sensitivity/safety follow-ups only where relevant to the brand category.
+- Create different follow-up paths for the main shopping goals, use cases, styles, preferences, constraints, compatibility needs, and product-fit signals found in the product catalogue.
+- Ask about attributes that actually help distinguish this brand's SKUs.
+- Include severity, duration, or triggers only when those concepts naturally fit the brand category.
+- Include safety/allergy/material/ingredient questions only when relevant to the catalog.
+- Avoid generic questions that could apply to any store if they do not help choose among these SKUs.
+- Do not mention product names in every question, but the options should reflect the catalog's real variety.
 - Use only these input_type values: "chips", "cards", "scale", "text".
 - Use concise consumer-friendly wording.
 - Every question must have a stable question_id like "q1", "q2", etc.
@@ -515,14 +538,15 @@ Rules:
 - Top-level key must be "questions_json".
 - questions_json must contain exactly ${GENERATED_QUESTION_COUNT} complete question objects.
 - Use question_id values q1 through q${GENERATED_QUESTION_COUNT} with no gaps.
-- q1 field_key must be "primary_concern" and must have at least 4 concern options.
-- q2-q10 must be category-specific follow-up questions.
-- q11-q14 must be shared final questions: allergies/avoided ingredients or restrictions, previous products tried, usage habits, and budget.
+- q1 field_key must be "primary_concern" and must ask the shopper's primary buying goal or requirement.
+- q1 must have at least 4 catalog-supported goal/use-case/style/product-family options.
+- q2-q10 must be category-specific product-selection follow-up questions grounded in the catalog.
+- q11-q14 must be shared final purchase-fit questions: budget, constraints, gifting/self-use, avoided materials/ingredients, sizing/compatibility, usage habits, or previous products tried.
 - Use only input_type: "chips", "cards", "scale", "text".
 - Do not include markdown or explanations.
 
 BRAND CATEGORY: ${category}
-CATALOGUE CONCERNS: ${JSON.stringify(catalogueConcerns)}
+CATALOG SIGNALS: ${JSON.stringify(catalogueSignals)}
 `
 
         questionsResult = await generateWithRetry(model, retryPrompt, 2)
@@ -571,10 +595,10 @@ ANSWER VALUE RULES:
 
 FLOW RULES:
 - Keep the quiz short and safe: no loops, no backwards jumps, and never route a question back to itself.
-- Create an actual decision tree where a user answers only the questions relevant to their concern.
-- The first node must branch from the biggest concern question to different concern-specific paths.
+- Create an actual decision tree where a user answers only the questions relevant to their shopping goal or requirement.
+- The first node must branch from the primary buying goal question to different product-selection paths.
 - Add "if" branches to at least ${MIN_BRANCHING_NODES} different nodes when those nodes have answer_values_for_if.
-- Prefer branching on the primary concern question, severity questions, subtype questions, duration questions, trigger questions, and sensitivity questions.
+- Prefer branching on the primary buying goal, product family, occasion/use case, style preference, compatibility/size, budget, and important constraints.
 - Each branching node must include at least 2 answer mappings inside "if" when at least 2 answer_values_for_if exist.
 - A branch should skip only questions made less relevant by that answer, or jump to a more relevant next question.
 - Do not skip safety or purchase-fit questions about allergies, avoided ingredients, budget, or previous treatments unless the current question already covers that topic.
@@ -582,8 +606,8 @@ FLOW RULES:
 - Every question must still appear as a node, even if some branches skip it.
 - Prefer default routing to the next_linear_question_id shown below.
 - Each user path should usually contain 5 to 8 questions, not all stored questions.
-- Different primary concerns should lead to visibly different follow-up paths.
-- Common final questions such as allergies, previous treatments, routine habits, and budget may be shared by many paths before "END".
+- Different primary buying goals should lead to visibly different follow-up paths.
+- Common final questions such as budget, gifting/self-use, avoided materials/ingredients, sizing/compatibility, routine habits, or previous products may be shared by many paths before "END".
 - If fewer than ${MIN_BRANCHING_NODES} questions have answer_values_for_if, add branches to every question that does have answer_values_for_if.
 
 QUESTIONS AVAILABLE FOR ROUTING:
@@ -761,7 +785,7 @@ const selectDynamicQuestions = async (req, res) => {
 
     // Step 2 — build prompt for Gemini
     const prompt = `
-You are an expert health and wellness advisor.
+You are an expert product advisor.
 
 A consumer has provided the following personal and lifestyle information:
 
@@ -794,7 +818,7 @@ Rules:
 - If age is relevant to this brand category, use it to choose age-appropriate follow-up questions.
 - Prioritise questions that match the stated brand category, product catalogue, and consumer goals.
 - Avoid redundant questions — pick diverse questions that cover different angles
-- Always include the primary concern question for the category
+- Always include the primary product-selection question for the category
 
 Respond ONLY in this exact JSON format with no extra text:
 {

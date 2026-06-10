@@ -861,6 +861,11 @@ function resolveNextQuestionId(){
 // . NAVIGATION .
 // Moves forward through the quiz and triggers dynamic questions after fixed answers.
 function next(){
+  if(!allQ.length || !allQ[cur]){
+    showFallback()
+    return
+  }
+
   saveText()
 
   if(useStoredFlow){
@@ -929,6 +934,7 @@ function go(n, dir){
 // Persists text or textarea input from the active question into the answers object.
 function saveText(){
   const q=allQ[cur]
+  if(!q) return
   if(q.input_type==='text'){
     const el=document.getElementById('fi-'+q.field_key)
     if(el) answers[q.field_key]=el.value
@@ -1577,6 +1583,9 @@ function showScreen(id){
 // Shows fallback products when a full AI recommendation cannot be displayed.
 function showFallback(){
   document.getElementById('q-wrap').innerHTML=`<div style="padding:32px 28px;"><div style="font-size:13px;color:var(--red);line-height:1.7;">Could not load questions from server.<br>Make sure the backend URL and brand API key are correct.</div></div>`
+  document.getElementById('btn-next').disabled = true
+  document.getElementById('btn-prev').disabled = true
+  document.getElementById('qcount').innerText = ''
 }
 
 // Resets local widget state so the user can start the assessment again.
