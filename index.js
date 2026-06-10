@@ -96,6 +96,10 @@ app.get('/test-fixed-questions', async (req, res) => {
   res.json({ total: data.length, questions: data })
 })
 
+app.get('/', (req, res) => {
+  res.send('AlphaMark Backend Running Successfully');
+});
+
 const PORT = process.env.PORT || 3000
 // Starts the Express server on the configured port.
 app.listen(PORT, () => {
