@@ -133,6 +133,65 @@ const getShopRecord = async (shop) => {
   return data
 }
 
+const tokenExpiryFields = (tokenData) => {
+  const expiresAt = tokenData.expires_in
+    ? new Date(Date.now() + tokenData.expires_in * 1000).toISOString()
+    : null
+  const refreshTokenExpiresAt = tokenData.refresh_token_expires_in
+    ? new Date(Date.now() + tokenData.refresh_token_expires_in * 1000).toISOString()
+    : null
+
+  return { expiresAt, refreshTokenExpiresAt }
+}
+
+const persistShopifyToken = async (shop, tokenData) => {
+  if (!tokenData?.access_token) {
+    throw new Error('Shopify did not return an access token.')
+  }
+
+  const { expiresAt, refreshTokenExpiresAt } = tokenExpiryFields(tokenData)
+  const updates = {
+    access_token: tokenData.access_token
+  }
+
+  if (tokenData.refresh_token) updates.refresh_token = tokenData.refresh_token
+  if (expiresAt) updates.expires_at = expiresAt
+  if (refreshTokenExpiresAt) updates.refresh_token_expires_at = refreshTokenExpiresAt
+
+  const { error } = await supabase
+    .from('shopify_stores')
+    .update(updates)
+    .eq('shop_domain', shop)
+
+  if (error) throw error
+
+  return tokenData.access_token
+}
+
+const migrateOfflineTokenToExpiring = async (shop, accessToken) => {
+  const { apiKey, apiSecret } = shopifyConfig()
+  if (!accessToken) return null
+
+  const payload = new URLSearchParams({
+    client_id: apiKey,
+    client_secret: apiSecret,
+    grant_type: 'urn:ietf:params:oauth:grant-type:token-exchange',
+    subject_token: accessToken,
+    subject_token_type: 'urn:shopify:params:oauth:token-type:offline-access-token',
+    requested_token_type: 'urn:shopify:params:oauth:token-type:offline-access-token',
+    expiring: '1'
+  })
+
+  const response = await axios.post(`https://${shop}/admin/oauth/access_token`, payload, {
+    headers: {
+      Accept: 'application/json',
+      'Content-Type': 'application/x-www-form-urlencoded'
+    }
+  })
+
+  return persistShopifyToken(shop, response.data || {})
+}
+
 const refreshAccessToken = async (shop, refreshToken) => {
   try {
     const { apiKey, apiSecret } = shopifyConfig()
@@ -152,26 +211,7 @@ const refreshAccessToken = async (shop, refreshToken) => {
       }
     })
 
-    const { access_token, refresh_token, expires_in, refresh_token_expires_in } = resp.data || {}
-    const expires_at = expires_in ? new Date(Date.now() + expires_in * 1000).toISOString() : null
-    const refresh_token_expires_at = refresh_token_expires_in
-      ? new Date(Date.now() + refresh_token_expires_in * 1000).toISOString()
-      : null
-
-    // Persist updated tokens
-    const updates = { access_token }
-    if (refresh_token) updates.refresh_token = refresh_token
-    if (expires_at) updates.expires_at = expires_at
-    if (refresh_token_expires_at) updates.refresh_token_expires_at = refresh_token_expires_at
-
-    const { error } = await supabase
-      .from('shopify_stores')
-      .update(updates)
-      .eq('shop_domain', shop)
-
-    if (error) console.error('Failed to persist refreshed Shopify token:', error)
-
-    return access_token
+    return persistShopifyToken(shop, resp.data || {})
   } catch (err) {
     console.error('Error refreshing Shopify token for', shop, err.response?.data || err.message || err)
     throw err
@@ -192,10 +232,9 @@ const getValidAccessToken = async (shop) => {
     if (store.refresh_token) {
       return await refreshAccessToken(shop, store.refresh_token)
     }
-    // no refresh token available - fall back to stored access_token
-    return store.access_token
+    return migrateOfflineTokenToExpiring(shop, store.access_token)
   }
-  return store.access_token
+  return migrateOfflineTokenToExpiring(shop, store.access_token)
 }
 
 const shopSlug = shop => shop.replace('.myshopify.com', '').toLowerCase()
