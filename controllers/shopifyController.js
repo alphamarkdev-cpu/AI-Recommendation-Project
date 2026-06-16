@@ -138,20 +138,31 @@ const refreshAccessToken = async (shop, refreshToken) => {
     const { apiKey, apiSecret } = shopifyConfig()
     if (!refreshToken) throw new Error('No refresh token available')
 
-    const resp = await axios.post(`https://${shop}/admin/oauth/access_token`, {
+    const payload = new URLSearchParams({
       client_id: apiKey,
       client_secret: apiSecret,
       grant_type: 'refresh_token',
       refresh_token: refreshToken
     })
 
-    const { access_token, refresh_token, expires_in } = resp.data || {}
+    const resp = await axios.post(`https://${shop}/admin/oauth/access_token`, payload, {
+      headers: {
+        Accept: 'application/json',
+        'Content-Type': 'application/x-www-form-urlencoded'
+      }
+    })
+
+    const { access_token, refresh_token, expires_in, refresh_token_expires_in } = resp.data || {}
     const expires_at = expires_in ? new Date(Date.now() + expires_in * 1000).toISOString() : null
+    const refresh_token_expires_at = refresh_token_expires_in
+      ? new Date(Date.now() + refresh_token_expires_in * 1000).toISOString()
+      : null
 
     // Persist updated tokens
     const updates = { access_token }
     if (refresh_token) updates.refresh_token = refresh_token
     if (expires_at) updates.expires_at = expires_at
+    if (refresh_token_expires_at) updates.refresh_token_expires_at = refresh_token_expires_at
 
     const { error } = await supabase
       .from('shopify_stores')
@@ -1445,17 +1456,29 @@ const handleShopifyCallback = async (req, res) => {
       return res.status(400).send('Invalid Shopify callback signature.')
     }
 
-    const tokenResponse = await axios.post(`https://${shop}/admin/oauth/access_token`, {
+    const payload = new URLSearchParams({
       client_id: apiKey,
       client_secret: apiSecret,
-      code
+      code,
+      expiring: '1'
+    })
+
+    const tokenResponse = await axios.post(`https://${shop}/admin/oauth/access_token`, payload, {
+      headers: {
+        Accept: 'application/json',
+        'Content-Type': 'application/x-www-form-urlencoded'
+      }
     })
 
     const tokenData = tokenResponse.data || {}
     const accessToken = tokenData.access_token
     const refreshToken = tokenData.refresh_token || null
     const expiresIn = tokenData.expires_in || null
+    const refreshTokenExpiresIn = tokenData.refresh_token_expires_in || null
     const expiresAt = expiresIn ? new Date(Date.now() + expiresIn * 1000).toISOString() : null
+    const refreshTokenExpiresAt = refreshTokenExpiresIn
+      ? new Date(Date.now() + refreshTokenExpiresIn * 1000).toISOString()
+      : null
 
     const brand = await findOrCreateShopBrand(shop)
 
@@ -1466,6 +1489,7 @@ const handleShopifyCallback = async (req, res) => {
         access_token: accessToken,
         refresh_token: refreshToken,
         expires_at: expiresAt,
+        refresh_token_expires_at: refreshTokenExpiresAt,
         scopes,
         brand_id: brand.brand_id,
         installed_at: new Date().toISOString(),
