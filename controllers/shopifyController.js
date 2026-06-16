@@ -122,6 +122,71 @@ const verifyShopifyHmac = query => {
   return crypto.timingSafeEqual(Buffer.from(digest), Buffer.from(hmac))
 }
 
+// --- Shopify token helpers (expiring offline tokens with refresh) ---
+const getShopRecord = async (shop) => {
+  const { data, error } = await supabase
+    .from('shopify_stores')
+    .select('*')
+    .eq('shop_domain', shop)
+    .maybeSingle()
+  if (error) throw error
+  return data
+}
+
+const refreshAccessToken = async (shop, refreshToken) => {
+  try {
+    const { apiKey, apiSecret } = shopifyConfig()
+    if (!refreshToken) throw new Error('No refresh token available')
+
+    const resp = await axios.post(`https://${shop}/admin/oauth/access_token`, {
+      client_id: apiKey,
+      client_secret: apiSecret,
+      grant_type: 'refresh_token',
+      refresh_token: refreshToken
+    })
+
+    const { access_token, refresh_token, expires_in } = resp.data || {}
+    const expires_at = expires_in ? new Date(Date.now() + expires_in * 1000).toISOString() : null
+
+    // Persist updated tokens
+    const updates = { access_token }
+    if (refresh_token) updates.refresh_token = refresh_token
+    if (expires_at) updates.expires_at = expires_at
+
+    const { error } = await supabase
+      .from('shopify_stores')
+      .update(updates)
+      .eq('shop_domain', shop)
+
+    if (error) console.error('Failed to persist refreshed Shopify token:', error)
+
+    return access_token
+  } catch (err) {
+    console.error('Error refreshing Shopify token for', shop, err.response?.data || err.message || err)
+    throw err
+  }
+}
+
+const getValidAccessToken = async (shop) => {
+  const store = await getShopRecord(shop)
+  if (!store) return null
+  // if expires_at is provided and token not expired, return access_token
+  if (store.expires_at) {
+    const exp = new Date(store.expires_at).getTime()
+    // refresh if token expires within next 60 seconds
+    if (Date.now() < exp - 60000) {
+      return store.access_token
+    }
+    // otherwise try refreshing
+    if (store.refresh_token) {
+      return await refreshAccessToken(shop, store.refresh_token)
+    }
+    // no refresh token available - fall back to stored access_token
+    return store.access_token
+  }
+  return store.access_token
+}
+
 const shopSlug = shop => shop.replace('.myshopify.com', '').toLowerCase()
 
 const escapeHtml = value => String(value ?? '')
@@ -1291,11 +1356,15 @@ const syncShopifyProducts = async (req, res) => {
       .maybeSingle()
 
     if (storeError) throw storeError
-    if (!store?.access_token || !store?.brands?.brand_id) {
+    if (!store?.brands?.brand_id) {
       return res.status(404).send('Shop is not connected to AlphaMark.')
     }
 
-    const shopifyProducts = await fetchShopifyProducts(shop, store.access_token)
+    // Obtain a valid (refreshed if needed) access token
+    const liveToken = await getValidAccessToken(shop)
+    if (!liveToken) return res.status(401).send('Shop access token missing or invalid. Re-install the app.')
+
+    const shopifyProducts = await fetchShopifyProducts(shop, liveToken)
     const savedCount = await saveShopifyProducts(shop, store.brands, shopifyProducts)
 
     try {
@@ -1382,7 +1451,12 @@ const handleShopifyCallback = async (req, res) => {
       code
     })
 
-    const accessToken = tokenResponse.data.access_token
+    const tokenData = tokenResponse.data || {}
+    const accessToken = tokenData.access_token
+    const refreshToken = tokenData.refresh_token || null
+    const expiresIn = tokenData.expires_in || null
+    const expiresAt = expiresIn ? new Date(Date.now() + expiresIn * 1000).toISOString() : null
+
     const brand = await findOrCreateShopBrand(shop)
 
     const { error: upsertError } = await supabase
@@ -1390,6 +1464,8 @@ const handleShopifyCallback = async (req, res) => {
       .upsert({
         shop_domain: shop,
         access_token: accessToken,
+        refresh_token: refreshToken,
+        expires_at: expiresAt,
         scopes,
         brand_id: brand.brand_id,
         installed_at: new Date().toISOString(),
