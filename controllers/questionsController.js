@@ -1,3 +1,4 @@
+const crypto = require('crypto')
 const { GoogleGenerativeAI } = require('@google/generative-ai')
 const supabase = require('../config/supabase')
 const { formatGeminiUsage } = require('../utils/geminiUsage')
@@ -217,8 +218,51 @@ const buildQuestionResponse = (brandCategory, poolQuestions, selectedIds = [], r
 // ── GET ALL FIXED QUESTIONS (personal + lifestyle) ──
 // Returns fixed personal and lifestyle questions in the order they should appear in the widget.
 // Returns the active pre-generated question flow for the authenticated brand and category.
-// Builds a deterministic fallback flow from product concerns when Gemini generation is unavailable.
-const buildFallbackFlow = (category, products) => {
+// Builds a compact catalog-aware fallback flow when Gemini generation is unavailable.
+const compactText = (value, maxLength = 160) => String(value || '')
+  .replace(/\s+/g, ' ')
+  .trim()
+  .slice(0, maxLength)
+
+const rotateArray = (values, seed = 0) => {
+  if (!values.length) return values
+  const offset = Math.abs(seed) % values.length
+  return [...values.slice(offset), ...values.slice(0, offset)]
+}
+
+const hashText = value => crypto
+  .createHash('sha1')
+  .update(String(value || ''))
+  .digest('hex')
+
+const buildCatalogProfile = (products, catalogueSignals) => {
+  const prices = products
+    .map(product => Number(product.price))
+    .filter(price => Number.isFinite(price) && price > 0)
+
+  return {
+    product_count: products.length,
+    categories: uniqueCleanSignals(products.map(product => product.category)).slice(0, 8),
+    vendors: uniqueCleanSignals(products.map(product => product.vendor)).slice(0, 6),
+    common_product_signals: catalogueSignals.slice(0, 16),
+    price_range: prices.length
+      ? { min: Math.min(...prices), max: Math.max(...prices) }
+      : null,
+    product_examples: products.slice(0, 12).map(product => ({
+      name: product.name,
+      category: cleanCatalogSignal(product.category) || product.category,
+      price: product.price,
+      tags: uniqueCleanSignals([
+        ...(product.product_tags || []),
+        ...(product.suitable_customer_attributes || []),
+        ...((product.product_match_tags || []).map(tag => tag.match_tag))
+      ]).slice(0, 6),
+      description: compactText(product.description, 140)
+    }))
+  }
+}
+
+const buildFallbackFlow = (category, products, seed = 0) => {
   const concernSet = new Set()
   const typeSet = new Set()
 
@@ -233,17 +277,25 @@ const buildFallbackFlow = (category, products) => {
       .forEach(type => typeSet.add(type))
   })
 
-  const concernOptions = Array.from(concernSet).slice(0, 8)
-  const typeOptions = Array.from(typeSet).slice(0, 6)
+  const concernOptions = rotateArray(Array.from(concernSet), seed).slice(0, 8)
+  const typeOptions = rotateArray(Array.from(typeSet), seed + 1).slice(0, 6)
   const concerns = concernOptions.length >= 4 ? concernOptions : categoryFallbackGoals(category)
   const types = typeOptions.length >= 3 ? typeOptions : categoryFallbackProfileOptions(category)
+  const priorityOptions = rotateArray([
+    'Best match for my need',
+    'Style or look',
+    'Comfort or ease of use',
+    'Durability or long life',
+    'Premium feel',
+    'Best value'
+  ], seed + 2)
 
   const questions_json = [
-    { question_id: 'q1', field_key: 'primary_concern', question_text: 'What are you shopping for today?', sub_text: 'Choose the closest goal so we can narrow the catalog.', input_type: 'chips', options_json: concerns, category, section_label: 'Assessment' },
+    { question_id: 'q1', field_key: 'primary_concern', question_text: `What do you want help choosing from this ${category} catalog?`, sub_text: 'Choose the closest goal so we can narrow the products.', input_type: 'chips', options_json: concerns, category, section_label: 'Assessment' },
     { question_id: 'q2', field_key: 'profile_type', question_text: 'Which option describes your buying style best?', sub_text: 'This helps us match products to your taste and confidence level.', input_type: 'cards', options_json: types.map(type => ({ label: type, emoji: '', sub: '' })), category, section_label: 'Assessment' },
     { question_id: 'q3', field_key: 'priority_level', question_text: 'How important is getting the perfect match?', sub_text: 'Use 1 for flexible and 5 for very specific.', input_type: 'scale', options_json: [1, 2, 3, 4, 5], category, section_label: 'Assessment' },
     { question_id: 'q4', field_key: 'purchase_timing', question_text: 'When do you plan to use or gift it?', sub_text: 'A rough timing helps us choose practical options.', input_type: 'chips', options_json: ['Immediately', 'This week', 'This month', 'Just exploring'], category, section_label: 'Assessment' },
-    { question_id: 'q5', field_key: 'selection_priority', question_text: 'What matters most in your choice?', sub_text: 'Pick the strongest deciding factor.', input_type: 'chips', options_json: ['Style', 'Comfort', 'Durability', 'Premium feel', 'Best value', 'Not sure'], category, section_label: 'Assessment' },
+    { question_id: 'q5', field_key: 'selection_priority', question_text: 'What matters most in your final choice?', sub_text: 'Pick the strongest deciding factor.', input_type: 'chips', options_json: priorityOptions, category, section_label: 'Assessment' },
     { question_id: 'q6', field_key: 'previous_products', question_text: 'Have you bought something similar before?', sub_text: 'Mention what you liked or did not like.', input_type: 'text', options_json: { placeholder: 'Example: product names, styles, or what worked/did not work...' }, category, section_label: 'Assessment' },
     { question_id: 'q7', field_key: 'allergies', question_text: 'Any materials, ingredients, or styles you avoid?', sub_text: 'This helps us filter poor-fit recommendations.', input_type: 'text', options_json: { placeholder: 'Write none if there are no restrictions' }, category, section_label: 'Assessment' },
     { question_id: 'q8', field_key: 'budget', question_text: 'What budget range feels comfortable?', sub_text: 'We will keep recommendations practical.', input_type: 'chips', options_json: ['Under 500', '500-1000', '1000-2000', 'No strict budget'], category, section_label: 'Assessment' }
@@ -475,6 +527,7 @@ const getActiveQuestionFlow = async (req, res) => {
 const generateQuestionFlowForBrand = async (brand, requestedCategory) => {
     const category = requestedCategory || brand.product_category || 'general'
     const brandId = brand.brand_id
+    const generationSeed = Number.parseInt(hashText(`${brandId}:${category}:${Date.now()}`).slice(0, 8), 16)
 
     const { data: products, error: productsError } = await supabase
       .from('products')
@@ -499,15 +552,15 @@ const generateQuestionFlowForBrand = async (brand, requestedCategory) => {
       throw error
     }
 
-    const productContext = products.slice(0, 20).map(product => ({
+    const productContext = rotateArray(products, generationSeed).slice(0, 12).map(product => ({
       name: product.name,
       category: cleanCatalogSignal(product.category) || product.category,
       price: product.price,
       vendor: cleanCatalogSignal(product.vendor) || product.vendor,
       product_tags: uniqueCleanSignals(product.product_tags || []),
-      description: String(product.description || '').slice(0, 220),
-      suitable_customer_attributes: uniqueCleanSignals(product.suitable_customer_attributes || []),
-      match_tags: uniqueCleanSignals(product.product_match_tags.map(tag => tag.match_tag))
+      description: compactText(product.description, 140),
+      suitable_customer_attributes: uniqueCleanSignals(product.suitable_customer_attributes || []).slice(0, 6),
+      match_tags: uniqueCleanSignals((product.product_match_tags || []).map(tag => tag.match_tag)).slice(0, 6)
     }))
     const catalogueSignals = Array.from(new Set(
       products.flatMap(product => [
@@ -518,7 +571,12 @@ const generateQuestionFlowForBrand = async (brand, requestedCategory) => {
       ])
         .map(cleanCatalogSignal)
         .filter(Boolean)
-    )).slice(0, 10)
+    )).slice(0, 16)
+    const catalogProfile = buildCatalogProfile(products, catalogueSignals)
+    const generationGuidance = {
+      seed: generationSeed,
+      instruction: 'Use this seed only to vary wording, option order, and path emphasis on each regeneration. Do not add randomness that conflicts with the catalog.'
+    }
 
     const brandSummaryPrompt = `
 Prompt 1: Understand the brand before writing any questions.
@@ -529,15 +587,17 @@ BRAND CATEGORY PROVIDED BY STORE:
 ${category}
 
 PRODUCT CATALOG SNAPSHOT:
-${JSON.stringify(productContext, null, 2)}
+${JSON.stringify(catalogProfile, null, 2)}
 
 CATALOG SIGNALS FROM PRODUCTS:
 ${JSON.stringify(catalogueSignals)}
 
+GENERATION GUIDANCE:
+${JSON.stringify(generationGuidance)}
+
 Rules:
 - Ground the summary only in the catalog snapshot and signals.
 - Do not invent products, benefits, ingredients, materials, sizes, compatibility, or customer types.
-- Ignore Shopify/admin labels such as hidden product, all, shop all, collection, new, featured, sale, or brand-name-only tags.
 - Identify what actually separates one SKU from another.
 - Keep it practical for question generation.
 
@@ -567,8 +627,11 @@ ${JSON.stringify(brandSummary, null, 2)}
 BRAND CATEGORY PROVIDED BY STORE:
 ${category}
 
-PRODUCT CATALOG SNAPSHOT:
-${JSON.stringify(productContext, null, 2)}
+COMPACT CATALOG PROFILE:
+${JSON.stringify(catalogProfile, null, 2)}
+
+GENERATION GUIDANCE:
+${JSON.stringify(generationGuidance)}
 
 Examples of category-specific dimensions:
 - Skincare: skin type, skin concern, sensitivity/allergies, ingredient avoidance, routine step, texture preference, climate/water intake/lifestyle only when relevant.
@@ -621,8 +684,14 @@ ${category}
 PRODUCT CATALOG SNAPSHOT:
 ${JSON.stringify(productContext, null, 2)}
 
+COMPACT CATALOG PROFILE:
+${JSON.stringify(catalogProfile, null, 2)}
+
 CATALOG SIGNALS FROM PRODUCTS:
 ${JSON.stringify(catalogueSignals)}
+
+GENERATION GUIDANCE:
+${JSON.stringify(generationGuidance)}
 
 Create a reusable routed question bank that helps a consumer decide what to buy from this exact catalog without calling AI during the quiz session.
 
@@ -630,6 +699,7 @@ IMPORTANT INTENT:
 - The quiz must discover the customer's choice, requirement, taste, use case, constraints, and buying intent.
 - Questions must follow the question_plan dimensions and be grounded in the actual SKU variety above.
 - q1 must use the primary_goal_options from the plan unless the catalog clearly supports better shopper-facing wording.
+- Use the generation guidance to make this newly synced flow feel fresh compared with previous generations for the same catalog.
 - Imagine the shopper is confused by many SKUs and clicked "Find my choice". Ask only questions that help narrow those SKUs to the right products.
 - Do not expose Shopify admin, merchandising, or collection labels as shopper answers.
 - Avoid options like "hidden product", "all", "shop all", "all collection", brand names, or other labels that do not describe a real customer need.
@@ -684,7 +754,8 @@ The questions_json array in your real response must contain q1 through q${GENERA
       model: 'gemini-2.5-flash',
       generationConfig: {
         responseMimeType: 'application/json',
-        temperature: 0.25,
+        temperature: 0.65,
+        topP: 0.9,
         maxOutputTokens: 4500
       }
     })
@@ -736,10 +807,12 @@ Rules:
 - Use only input_type: "chips", "cards", "scale", "text".
 - Do not include markdown or explanations.
 
-BRAND CATEGORY: ${category}
-CATALOG SIGNALS: ${JSON.stringify(catalogueSignals)}
-BRAND SUMMARY: ${JSON.stringify(brandSummary)}
-QUESTION PLAN: ${JSON.stringify(questionPlan)}
+        BRAND CATEGORY: ${category}
+        CATALOG SIGNALS: ${JSON.stringify(catalogueSignals)}
+        COMPACT CATALOG PROFILE: ${JSON.stringify(catalogProfile)}
+        GENERATION GUIDANCE: ${JSON.stringify(generationGuidance)}
+        BRAND SUMMARY: ${JSON.stringify(brandSummary)}
+        QUESTION PLAN: ${JSON.stringify(questionPlan)}
 `
 
         questionsResult = await generateWithRetry(model, retryPrompt, 2)
@@ -835,15 +908,15 @@ The example above shows the object shape only. Your real response must include e
         flow_json: flowJson
       }
     } catch (error) {
-      console.error('Gemini flow generation failed. Using deterministic fallback flow:', error.message)
-      flow = buildFallbackFlow(category, products)
+      console.error('Gemini flow generation failed. Using catalog fallback flow:', error.message)
+      flow = buildFallbackFlow(category, products, generationSeed)
       usedFallback = true
       fallbackReason = error.message
     }
 
     if (!Array.isArray(flow.questions_json) || !flow.flow_json) {
-      console.error('AI did not return a valid question flow shape. Using deterministic fallback flow.')
-      flow = buildFallbackFlow(category, products)
+      console.error('AI did not return a valid question flow shape. Using catalog fallback flow.')
+      flow = buildFallbackFlow(category, products, generationSeed)
       aiUsage = emptyUsage
       usedFallback = true
       fallbackReason = fallbackReason || 'AI did not return a valid question flow shape.'
