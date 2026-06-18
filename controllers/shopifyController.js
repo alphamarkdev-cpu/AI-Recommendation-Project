@@ -1449,7 +1449,19 @@ const syncShopifyProducts = async (req, res) => {
     const liveToken = await getValidAccessToken(shop)
     if (!liveToken) return res.status(401).send('Shop access token missing or invalid. Re-install the app.')
 
-    const shopifyProducts = await fetchShopifyProducts(shop, liveToken)
+    console.log('BEFORE FETCH')
+
+const shopifyProducts =
+  await fetchShopifyProducts(
+    shop,
+    liveToken
+  )
+
+console.log('AFTER FETCH')
+console.log(
+  'Products:',
+  shopifyProducts.length
+)
     const savedCount = await saveShopifyProducts(shop, store.brands, shopifyProducts)
 
     try {
