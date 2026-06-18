@@ -315,6 +315,12 @@ const fetchShopifyProducts = async (shop, accessToken) => {
         Accept: 'application/json'
       }
     })
+    console.log(
+JSON.stringify(
+  response.data.products[0],
+  null,
+  2
+))
 
     products.push(...(response.data?.products || []))
     nextUrl = parseLinkHeader(response.headers.link)
@@ -332,7 +338,36 @@ const buildProductPayload = (shop, brand, product) => {
   const firstVariant = product.variants?.[0]
   const price = Number(firstVariant?.price || 0)
   const imageUrl = product.image?.src || product.images?.[0]?.src || null
-  const category = String(product.product_type || brand.product_category || 'general').trim() || 'general'
+ const rawCategory =
+  product.category?.name ||
+  product.category?.fullName ||
+  product.category ||
+  product.product_category ||
+  product.product_type ||
+  brand.product_category ||
+  'general'
+
+const category =
+String(rawCategory).trim()
+    console.log(
+    'PRODUCT:',
+    product.title
+    )
+
+    console.log(
+    'product_type:',
+    product.product_type
+    )
+
+    console.log(
+    'category:',
+    product.category
+    )
+
+    console.log(
+    'product_category:',
+    product.product_category
+    )
 
   return {
     brand_id: brand.brand_id,
