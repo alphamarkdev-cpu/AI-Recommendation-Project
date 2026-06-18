@@ -572,190 +572,348 @@ const generateQuestionFlowForBrand = async (brand, requestedCategory) => {
         .map(cleanCatalogSignal)
         .filter(Boolean)
     )).slice(0, 16)
-    const catalogProfile = buildCatalogProfile(products, catalogueSignals)
-    const generationGuidance = {
-      seed: generationSeed,
-      instruction: 'Use this seed only to vary wording, option order, and path emphasis on each regeneration. Do not add randomness that conflicts with the catalog.'
-    }
+const catalogProfile = buildCatalogProfile(
+  products,
+  catalogueSignals
+)
 
-    const brandSummaryPrompt = `
-Prompt 1: Understand the brand before writing any questions.
+const questionStyles = [
+  'direct',
+  'conversational',
+  'scenario',
+  'preference',
+  'problem_based'
+]
 
-You are preparing a product-advisor quiz for ${brand.name}. First summarize what this brand sells, what the catalog variety is, and what shopper decisions matter.
+const questionStyle =
+  questionStyles[
+    generationSeed %
+    questionStyles.length
+  ]
 
-BRAND CATEGORY PROVIDED BY STORE:
+const questionSequenceStyles = [
+  'concern_first',
+  'profile_first',
+  'lifestyle_first',
+  'goal_first'
+]
+
+const questionSequence =
+  questionSequenceStyles[
+    generationSeed %
+    questionSequenceStyles.length
+  ]
+
+const generationGuidance = {
+  seed: generationSeed,
+  question_style: questionStyle,
+  question_sequence: questionSequence,
+  instruction: `
+Use this seed to create a fresh advisor experience.
+
+You may vary:
+- question wording
+- conversational style
+- question framing
+- option ordering
+- question sequence
+- shopper persona
+- follow-up path emphasis
+
+Do NOT change:
+- product facts
+- catalog signals
+- match tags
+- recommendation logic
+
+Each regeneration should feel like a newly designed advisor while remaining grounded in the product catalog.
+`
+}
+
+const brandSummaryPrompt = `
+Understand this product catalog before generating quiz questions.
+
+BRAND:
+${brand.name}
+
+CATEGORY:
 ${category}
 
-PRODUCT CATALOG SNAPSHOT:
-${JSON.stringify(catalogProfile, null, 2)}
+PRODUCT PROFILE:
+${JSON.stringify({
+  product_count:
+    catalogProfile.product_count,
+  categories:
+    catalogProfile.categories,
+  common_product_signals:
+    catalogProfile.common_product_signals
+})}
 
-CATALOG SIGNALS FROM PRODUCTS:
-${JSON.stringify(catalogueSignals)}
+CATALOG SIGNALS:
+${JSON.stringify(
+  catalogueSignals.slice(0, 15)
+)}
 
-GENERATION GUIDANCE:
-${JSON.stringify(generationGuidance)}
+TASK:
 
-Rules:
-- Ground the summary only in the catalog snapshot and signals.
-- Do not invent products, benefits, ingredients, materials, sizes, compatibility, or customer types.
-- Identify what actually separates one SKU from another.
-- Keep it practical for question generation.
+Identify:
 
-Return ONLY valid JSON in this exact shape:
+1. What this brand sells.
+2. Main product families.
+3. What differentiates one SKU from another.
+4. Shopper goals that matter.
+5. Information that should be collected later in the quiz.
+
+RULES:
+
+- Use only the catalog information provided.
+- Do not invent products, ingredients, materials, benefits, sizes, compatibility, or customer types.
+- Focus only on differences that can affect recommendations.
+- Keep the summary practical for question generation.
+- Maximum:
+  • 6 shopper goals
+  • 6 must-ask contexts
+  • 5 avoid-asking items.
+
+Return ONLY JSON:
+
 {
   "brand_summary": {
     "brand_name": "${brand.name}",
-    "inferred_category": "...",
-    "catalog_summary": "...",
-    "primary_product_families": ["..."],
-    "important_sku_differences": ["..."],
-    "likely_shopper_goals": ["..."],
-    "must_ask_context": ["..."],
-    "avoid_asking": ["..."]
+    "inferred_category": "",
+    "catalog_summary": "",
+    "primary_product_families": [],
+    "important_sku_differences": [],
+    "likely_shopper_goals": [],
+    "must_ask_context": [],
+    "avoid_asking": []
   }
 }
 `
 
-    const questionPlanPrompt = brandSummary => `
-Prompt 2: Decide the best question-generation category and shopper dimensions.
+ const questionPlanPrompt = brandSummary => `
+Decide the best shopper dimensions for a product-advisor quiz.
 
-Use the brand summary and product catalog to choose the right quiz dimensions before writing questions.
+CATEGORY:
+${category}
 
 BRAND SUMMARY:
-${JSON.stringify(brandSummary, null, 2)}
+${JSON.stringify({
+  inferred_category:
+    brandSummary.inferred_category,
+  primary_product_families:
+    brandSummary.primary_product_families,
+  important_sku_differences:
+    brandSummary.important_sku_differences,
+  likely_shopper_goals:
+    brandSummary.likely_shopper_goals,
+  must_ask_context:
+    brandSummary.must_ask_context
+})}
 
-BRAND CATEGORY PROVIDED BY STORE:
-${category}
+CATALOG SIGNALS:
+${JSON.stringify(
+  catalogueSignals.slice(0, 15)
+)}
 
-COMPACT CATALOG PROFILE:
-${JSON.stringify(catalogProfile, null, 2)}
+GENERATION:
+${JSON.stringify({
+  style:
+    generationGuidance.question_style,
+  sequence:
+    generationGuidance.question_sequence
+})}
 
-GENERATION GUIDANCE:
-${JSON.stringify(generationGuidance)}
+CATEGORY HINTS:
 
-Examples of category-specific dimensions:
-- Skincare: skin type, skin concern, sensitivity/allergies, ingredient avoidance, routine step, texture preference, climate/water intake/lifestyle only when relevant.
-- Men's accessories: purpose/occasion, accessory wear area, style personality, metal/material preference, skin tone or outfit color pairing, size/fit, gifting/self-use.
-- Hair care: hair type, scalp condition, styling goal, wash frequency, ingredient restriction, routine effort.
-- Electronics: use case, device compatibility, feature priority, portability, budget, setup comfort.
-- Supplements: wellness goal, dietary restriction, format preference, timing, sensitivities, current routine.
+skincare:
+skin_type, concern, sensitivity,
+ingredient_avoidance, routine.
 
-Rules:
-- Choose dimensions that help distinguish this exact catalog's SKUs.
-- Do not force skincare questions onto non-skincare brands.
-- Do not use medical/diagnostic dimensions unless the catalog truly requires safe wellness screening.
-- Include allergies/material/ingredient questions only if products touch skin/body or contain relevant materials/ingredients.
-- Prefer shopper language over merchandising language.
-- Avoid generic dimensions that would not change the recommendation.
+haircare:
+hair_type, scalp_condition,
+goal, wash_frequency.
 
-Return ONLY valid JSON in this exact shape:
+accessories:
+occasion, style, material,
+size, gifting, color pairing.
+
+electronics:
+use_case, compatibility,
+features, portability, budget.
+
+supplements:
+goal, restrictions,
+format, sensitivities.
+
+RULES:
+
+1. Choose dimensions that distinguish
+actual SKUs.
+
+2. Do not force skincare dimensions
+onto non-skincare categories.
+
+3. Ask about allergies/materials
+only when relevant.
+
+4. Prefer shopper language.
+
+5. Avoid dimensions that would not
+change recommendations.
+
+6. Include dimensions that can later
+be mapped to product tags or
+match tags.
+
+Return ONLY JSON:
+
 {
   "question_plan": {
-    "generation_category": "...",
-    "category_reasoning": "...",
-    "primary_goal_options": ["...", "...", "...", "..."],
+    "generation_category": "",
+    "category_reasoning": "",
+    "primary_goal_options": [],
     "question_dimensions": [
       {
-        "dimension": "...",
-        "why_it_matters": "...",
-        "example_answer_options": ["...", "..."]
+        "dimension": "",
+        "why_it_matters": "",
+        "example_answer_options": []
       }
     ],
-    "shared_final_dimensions": ["...", "..."],
-    "avoid_questions_about": ["..."]
+    "shared_final_dimensions": [],
+    "avoid_questions_about": []
   }
 }
 `
 
-    const buildQuestionsPrompt = (brandSummary, questionPlan) => `
-Prompt 3: Generate the routed product-advisor question bank.
+   const buildQuestionsPrompt = (
+  brandSummary,
+  questionPlan
+) => `
+Generate a reusable product-advisor quiz for ${brand.name}.
 
-You are building a reusable product-advisor quiz for ${brand.name}.
-
-BRAND SUMMARY FROM PROMPT 1:
-${JSON.stringify(brandSummary, null, 2)}
-
-QUESTION CATEGORY PLAN FROM PROMPT 2:
-${JSON.stringify(questionPlan, null, 2)}
-
-BRAND CATEGORY PROVIDED BY STORE:
+CATEGORY:
 ${category}
 
-PRODUCT CATALOG SNAPSHOT:
-${JSON.stringify(productContext, null, 2)}
+BRAND SUMMARY:
+${JSON.stringify({
+  inferred_category:
+    brandSummary.inferred_category,
+  primary_product_families:
+    brandSummary.primary_product_families,
+  important_sku_differences:
+    brandSummary.important_sku_differences,
+  likely_shopper_goals:
+    brandSummary.likely_shopper_goals
+})}
 
-COMPACT CATALOG PROFILE:
-${JSON.stringify(catalogProfile, null, 2)}
+QUESTION PLAN:
+${JSON.stringify({
+  generation_category:
+    questionPlan.generation_category,
+  question_dimensions:
+    questionPlan.question_dimensions,
+  shared_final_dimensions:
+    questionPlan.shared_final_dimensions
+})}
 
-CATALOG SIGNALS FROM PRODUCTS:
-${JSON.stringify(catalogueSignals)}
+CATALOG SIGNALS:
+${JSON.stringify(
+  catalogueSignals.slice(0, 15)
+)}
 
-GENERATION GUIDANCE:
-${JSON.stringify(generationGuidance)}
+PRODUCT EXAMPLES:
+${JSON.stringify(
+  productContext.slice(0, 8)
+)}
 
-Create a reusable routed question bank that helps a consumer decide what to buy from this exact catalog without calling AI during the quiz session.
+PREVIOUS QUESTIONS:
+${JSON.stringify(
+  previousQuestions.slice(-10)
+)}
 
-IMPORTANT INTENT:
-- The quiz must discover the customer's choice, requirement, taste, use case, constraints, and buying intent.
-- Questions must follow the question_plan dimensions and be grounded in the actual SKU variety above.
-- q1 must use the primary_goal_options from the plan unless the catalog clearly supports better shopper-facing wording.
-- Use the generation guidance to make this newly synced flow feel fresh compared with previous generations for the same catalog.
-- Imagine the shopper is confused by many SKUs and clicked "Find my choice". Ask only questions that help narrow those SKUs to the right products.
-- Do not expose Shopify admin, merchandising, or collection labels as shopper answers.
-- Avoid options like "hidden product", "all", "shop all", "all collection", brand names, or other labels that do not describe a real customer need.
+GENERATION:
+${JSON.stringify({
+  style:
+    generationGuidance.question_style,
+  sequence:
+    generationGuidance.question_sequence,
+  seed:
+    generationGuidance.seed
+})}
 
-COUNT AND COVERAGE RULES:
-- Generate exactly ${GENERATED_QUESTION_COUNT} question objects in questions_json.
-- Do not generate 2, 8, 10, or 18 questions. The response is invalid unless questions_json.length is exactly ${GENERATED_QUESTION_COUNT}.
-- q1 must ask the shopper's primary buying goal / requirement and must use field_key "primary_concern" for API compatibility.
-- q1 options must include at least 4 catalog-supported shopping goals, needs, occasions, use cases, styles, or product families.
-- q2-q10 must be follow-up questions for different q1 paths, based on the planned dimensions and product-fit signals.
-- q11-q14 must be shared final questions for purchase-fit details such as budget, preference constraints, gifting/self-use, avoided materials/ingredients, sizing/compatibility, or previous product experience when relevant.
-- Not every user should answer every question. The flow_json will later choose one relevant path.
-- Design the bank so a user path can contain 5 to 8 questions while the database stores all ${GENERATED_QUESTION_COUNT}.
+TASK:
+Create a routed question bank that helps shoppers choose products from this catalog.
 
-QUESTION CONTENT RULES:
-- Create different follow-up paths for the main shopping goals, use cases, styles, preferences, constraints, compatibility needs, and product-fit signals found in the product catalogue.
-- Ask about attributes that actually help distinguish this brand's SKUs.
-- Include severity, duration, or triggers only when those concepts naturally fit the brand category.
-- Include safety/allergy/material/ingredient questions only when relevant to the catalog and question_plan.
-- Avoid generic questions that could apply to any store if they do not help choose among these SKUs.
-- Do not mention product names in every question, but the options should reflect the catalog's real variety.
-- Use only these input_type values: "chips", "cards", "scale", "text".
-- Use concise consumer-friendly wording.
-- Every question must have a stable question_id like "q1", "q2", etc.
-- Use sequential question_id values from q1 through q${GENERATED_QUESTION_COUNT} without gaps.
-- Every field_key must be lowercase snake_case.
-- For chips/cards, options_json must be an array.
-- For scale, options_json must be [1,2,3,4,5].
-- For text, options_json must be an object with a placeholder.
-- Use answer option labels that are easy to branch on later.
+RULES:
 
-Return ONLY valid JSON in this shape:
+1. Generate exactly ${GENERATED_QUESTION_COUNT} questions.
+
+2. q1:
+- field_key: primary_concern
+- ask buying goal, need, occasion, style, or use case
+- minimum 4 options
+
+3. q2-q10:
+- category-specific follow-up questions
+- questions must help distinguish SKUs
+- questions must vary according to catalog signals
+
+4. q11-q${GENERATED_QUESTION_COUNT}:
+- shared purchase-fit questions:
+budget, constraints, gifting, compatibility, preferences, previous experience.
+
+5. Questions should:
+- be concise
+- consumer friendly
+- avoid Shopify labels
+- avoid generic questions
+- avoid repeating product names
+
+6. Do NOT repeat wording from PREVIOUS QUESTIONS.
+
+You may ask the same dimension but vary:
+- wording
+- framing
+- option order
+- sequence
+- conversational style
+
+7. Follow:
+Style:
+${generationGuidance.question_style}
+
+Sequence:
+${generationGuidance.question_sequence}
+
+8. Same catalog synced multiple times must produce a fresh advisor experience.
+
+OUTPUT:
+
 {
   "questions_json": [
     {
-      "question_id": "q1",
-      "field_key": "primary_concern",
-      "question_text": "...",
-      "sub_text": "...",
-      "input_type": "chips",
-      "options_json": ["...", "..."],
-      "category": "${category}",
-      "section_label": "Assessment"
+      "question_id":"q1",
+      "field_key":"primary_concern",
+      "question_text":"...",
+      "sub_text":"...",
+      "input_type":"chips",
+      "options_json":["..."],
+      "category":"${category}",
+      "section_label":"Assessment"
     }
   ]
 }
 
-The questions_json array in your real response must contain q1 through q${GENERATED_QUESTION_COUNT} as ${GENERATED_QUESTION_COUNT} complete objects.
+Return ONLY valid JSON.
 `
 
     const model = genAI.getGenerativeModel({
       model: 'gemini-2.5-flash',
       generationConfig: {
         responseMimeType: 'application/json',
-        temperature: 0.65,
-        topP: 0.9,
+        temperature: 0.85,
+        topP: 0.95,
         maxOutputTokens: 4500
       }
     })
@@ -902,11 +1060,104 @@ The example above shows the object shape only. Your real response must include e
         console.error('Gemini flow routing failed:', flowError.message)
         throw flowError
       }
+      const advisorConfig =
+        advisorResponse.advisor_config || {
+          requires_photo: false,
+          photo_reason: null,
+          requires_routine: false,
+          recommendation_style: "products"
+}
 
-      flow = {
-        questions_json: questions,
-        flow_json: flowJson
-      }
+const recommendationSchema =
+    advisorResponse.recommendation_schema || {}
+
+flow = {
+  questions_json: questions,
+  flow_json: flowJson,
+  advisor_config: advisorConfig,
+  recommendation_schema:
+    recommendationSchema
+}
+      const advisorPrompt = `
+You are designing the recommendation engine configuration.
+
+BRAND CATEGORY:
+${category}
+
+BRAND SUMMARY:
+${JSON.stringify(brandSummary, null, 2)}
+
+QUESTION PLAN:
+${JSON.stringify(questionPlan, null, 2)}
+
+PRODUCT CATALOG:
+${JSON.stringify(catalogProfile, null, 2)}
+
+Your task:
+
+1. Decide whether recommendations need photo analysis.
+
+Examples:
+- skincare → yes
+- makeup → yes
+- accessories → yes
+- eyewear → yes
+- supplements → no
+- electronics → no
+
+2. Decide whether recommendations need routines.
+
+Examples:
+- skincare → yes
+- haircare → yes
+- supplements → sometimes
+- accessories → no
+- electronics → no
+
+3. Decide recommendation style.
+
+Possible values:
+
+"routine"
+"products"
+
+4. Create recommendation weights.
+
+Weights must total 1.
+
+Return ONLY JSON:
+
+{
+  "advisor_config": {
+    "requires_photo": true,
+    "photo_reason": "skin analysis",
+    "requires_routine": true,
+    "recommendation_style": "routine"
+  },
+  "recommendation_schema": {
+    "primary_concern_weight": 0.35,
+    "profile_weight": 0.25,
+    "photo_weight": 0.25,
+    "budget_weight": 0.15
+  }
+}
+`
+const advisorResult =
+await generateWithRetry(
+  model,
+  advisorPrompt
+)
+
+const advisorUsage =
+formatGeminiUsage(
+  advisorResult.response.usageMetadata
+)
+
+const advisorResponse =
+await parseJsonResponseWithRepair(
+  model,
+  advisorResult.response.text()
+)
     } catch (error) {
       console.error('Gemini flow generation failed. Using catalog fallback flow:', error.message)
       flow = buildFallbackFlow(category, products, generationSeed)
@@ -934,6 +1185,25 @@ The example above shows the object shape only. Your real response must include e
     if (latestError) throw latestError
 
     const nextVersion = (latestFlow?.version || 0) + 1
+    const { data: previousFlows } =
+await supabase
+.from('brand_question_flows')
+.select('questions_json')
+.eq('brand_id', brandId)
+.eq('category', category)
+.order('version', {
+  ascending: false
+})
+.limit(3)
+
+const previousQuestions =
+(previousFlows || [])
+.flatMap(
+  flow => flow.questions_json || []
+)
+.map(
+  q => q.question_text
+)
 
     const { error: deactivateError } = await supabase
       .from('brand_question_flows')
@@ -952,6 +1222,8 @@ The example above shows the object shape only. Your real response must include e
         version: nextVersion,
         questions_json: flow.questions_json,
         flow_json: flow.flow_json,
+        advisor_config: flow.advisor_config,
+        recommendation_schema: flow.recommendation_schema,
         is_active: true
       })
       .select('flow_id, brand_id, category, version, is_active, updated_at')
