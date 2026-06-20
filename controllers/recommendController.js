@@ -46,6 +46,65 @@ const parseDataUrlImage = dataUrl => {
   }
 }
 
+const isGenericUsageText = value => {
+  const text = String(value || '').trim().toLowerCase()
+  if (!text) return true
+
+  return [
+    'use as directed by the brand',
+    'use as directed',
+    'as needed'
+  ].some(phrase => text.includes(phrase))
+}
+
+const buildPersonalizedUsage = (item = {}) => {
+  const category = String(item.category || '').toLowerCase()
+  const productName = item.product_name || item.name || 'this product'
+  const timing = item.when_to_apply || item.time_to_apply || item.recommended_timing || ''
+  const isMask = category.includes('mask') || String(productName).toLowerCase().includes('mask')
+
+  if (isMask) {
+    return 'After cleansing, apply a thin even layer on clean skin, leave it for 10-15 minutes, then rinse and follow with moisturizer. Use 2-3 times weekly, and avoid using on irritated skin.'
+  }
+
+  if (category.includes('cleanser') || String(productName).toLowerCase().includes('cleanser')) {
+    return 'Use on damp skin as the first step, massage gently for 30-60 seconds, then rinse well. Use once or twice daily depending on comfort.'
+  }
+
+  if (category.includes('serum') || String(productName).toLowerCase().includes('serum')) {
+    return 'After cleansing, apply 2-3 drops to dry skin, then follow with moisturizer. Start once daily and reduce frequency if your skin feels irritated.'
+  }
+
+  if (category.includes('moistur') || String(productName).toLowerCase().includes('cream')) {
+    return 'Apply a small amount after serum or treatment steps to seal in hydration. Use morning and evening, or whenever the skin feels dry.'
+  }
+
+  if (category.includes('sunscreen') || String(productName).toLowerCase().includes('spf')) {
+    return 'Use as the final morning step. Apply generously 15 minutes before sun exposure and reapply every 2-3 hours when outdoors.'
+  }
+
+  return `Use ${timing ? `${timing.toLowerCase()} ` : ''}as part of the recommended routine. Apply a small amount, follow lighter products before heavier ones, and start gradually to check comfort.`
+}
+
+const improveUsageInstructions = items => {
+  asArray(items).forEach(item => {
+    if (isGenericUsageText(item?.how_to_use)) {
+      item.how_to_use = buildPersonalizedUsage(item)
+    }
+  })
+}
+
+const addProductContextToItems = (items, productByName) => {
+  asArray(items).forEach(item => {
+    const product = productByName.get(item?.product_name)
+    if (!product) return
+
+    item.category = item.category || product.category
+    item.price = item.price || product.price
+    item.recommended_timing = item.recommended_timing || product.recommended_timing
+  })
+}
+
 const getActiveBrandProducts = async brandId => {
   const { data, error } = await supabase
     .from('products')
@@ -214,6 +273,7 @@ const getRecommendation = async (req, res) => {
       productImages[p.name] = p.image_url  || null
       productUrls[p.name]   = p.product_url || null
     })
+    const productByName = new Map(productsContext.map(product => [product.name, product]))
 
     const aiWeights =
       recommendationSchema.weights ||
@@ -281,7 +341,9 @@ TASK:
 7. Never invent products.
 8. Avoid products containing restricted materials or ingredients.
 9. Use product how_to_use, recommendation_step, and recommended_timing from AVAILABLE PRODUCTS when creating usage instructions.
-10. Keep all responses short and consumer friendly.
+10. If product how_to_use is generic, missing, or says "Use as directed by the brand", do not repeat it. Create a clear consumer routine instruction from product category, description, selected concern, timing, and routine step.
+11. How-to-use text must explain amount, when to apply, frequency, order in routine, and any simple caution. It must sound like an AI advisor, not catalog copy.
+12. Keep all responses short and consumer friendly.
 
 OUTPUT RULES:
 
@@ -324,7 +386,7 @@ Product format:
   "category":"",
   "price":0,
   "why_chosen":"",
-  "how_to_use":"Use the product's how_to_use from AVAILABLE PRODUCTS, rewritten briefly for this consumer."
+  "how_to_use":"Concrete personalized instruction. Example: After cleansing, apply a thin even layer for 10-15 minutes, 2-3 times weekly, then rinse and moisturize. Avoid overusing on irritated skin."
 }
 
 ${
@@ -337,8 +399,8 @@ morning_routine:
 {
   "step":1,
   "product_name":"",
-  "how_to_use":"",
-  "why_this_step":""
+  "how_to_use":"Concrete amount, timing, frequency, and order.",
+  "why_this_step":"Why this step helps the consumer's selected concern."
 }
 
 evening_routine:
@@ -346,8 +408,8 @@ evening_routine:
 {
   "step":1,
   "product_name":"",
-  "how_to_use":"",
-  "why_this_step":""
+  "how_to_use":"Concrete amount, timing, frequency, and order.",
+  "why_this_step":"Why this step helps the consumer's selected concern."
 }
 
 tips:
@@ -407,6 +469,14 @@ Return ONLY valid JSON.
 
     recommendation.buying_tips =
     recommendation.buying_tips || []
+
+    addProductContextToItems(recommendation.recommended_products, productByName)
+    addProductContextToItems(recommendation.morning_routine, productByName)
+    addProductContextToItems(recommendation.evening_routine, productByName)
+
+    improveUsageInstructions(recommendation.recommended_products)
+    improveUsageInstructions(recommendation.morning_routine)
+    improveUsageInstructions(recommendation.evening_routine)
 
     if (photoImage && recommendation.photo_verification?.blocked) {
       return res.status(422).json({

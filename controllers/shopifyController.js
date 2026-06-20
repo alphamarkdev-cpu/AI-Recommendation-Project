@@ -420,7 +420,7 @@ const buildProductPayload = (shop, brand, product) => {
     description: stripHtml(product.body_html || product.descriptionHtml),
     recommendation_step: 1,
     recommended_timing: 'As needed',
-    how_to_use: 'Use as directed by the brand.',
+    how_to_use: 'Apply as part of the recommended routine. Explain the amount, timing, frequency, and order based on this product category.',
     price: Number.isFinite(price) ? price : 0,
     image_url: imageUrl,
     product_url: shopifyProductUrl(shop, product),
