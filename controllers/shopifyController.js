@@ -261,6 +261,8 @@ const normalizeBrandCategory = value => String(value || 'general')
   .replace(/\s+/g, ' ')
   .slice(0, 80)
 
+const isDefaultCategory = value => normalizeBrandCategory(value) === 'general'
+
 const stripHtml = value => String(value || '')
   .replace(/<script[\s\S]*?<\/script>/gi, ' ')
   .replace(/<style[\s\S]*?<\/style>/gi, ' ')
@@ -306,25 +308,77 @@ const parseLinkHeader = linkHeader => {
 
 const fetchShopifyProducts = async (shop, accessToken) => {
   const products = []
-  let nextUrl = `https://${shop}/admin/api/${SHOPIFY_API_VERSION}/products.json?limit=250`
+  let cursor = null
 
-  while (nextUrl) {
-    const response = await axios.get(nextUrl, {
+  const query = `
+    query AlphaMarkProducts($cursor: String) {
+      products(first: 250, after: $cursor) {
+        edges {
+          cursor
+          node {
+            id
+            legacyResourceId
+            title
+            handle
+            vendor
+            productType
+            tags
+            status
+            descriptionHtml
+            category {
+              id
+              name
+              fullName
+            }
+            featuredImage {
+              url
+            }
+            images(first: 1) {
+              edges {
+                node {
+                  url
+                }
+              }
+            }
+            variants(first: 1) {
+              edges {
+                node {
+                  price
+                }
+              }
+            }
+          }
+        }
+        pageInfo {
+          hasNextPage
+          endCursor
+        }
+      }
+    }
+  `
+
+  do {
+    const response = await axios.post(`https://${shop}/admin/api/${SHOPIFY_API_VERSION}/graphql.json`, {
+      query,
+      variables: { cursor }
+    }, {
       headers: {
         'X-Shopify-Access-Token': accessToken,
-        Accept: 'application/json'
+        Accept: 'application/json',
+        'Content-Type': 'application/json'
       }
     })
-    console.log(
-JSON.stringify(
-  response.data.products[0],
-  null,
-  2
-))
 
-    products.push(...(response.data?.products || []))
-    nextUrl = parseLinkHeader(response.headers.link)
-  }
+    if (response.data?.errors?.length) {
+      throw new Error(response.data.errors.map(error => error.message).join(', '))
+    }
+
+    const productConnection = response.data?.data?.products
+    products.push(...(productConnection?.edges || []).map(edge => edge.node))
+    cursor = productConnection?.pageInfo?.hasNextPage
+      ? productConnection.pageInfo.endCursor
+      : null
+  } while (cursor)
 
   return products
 }
@@ -333,47 +387,37 @@ const shopifyProductUrl = (shop, product) => (
   product.handle ? `https://${shop}/products/${product.handle}` : null
 )
 
+const firstGraphqlNode = connection => connection?.edges?.[0]?.node
+
+const getProductCategory = (product, brand) => {
+  const rawCategory =
+    product.category?.name ||
+    product.category?.fullName ||
+    product.category ||
+    product.product_category ||
+    product.productType ||
+    product.product_type ||
+    brand.product_category ||
+    'general'
+
+  return normalizeBrandCategory(rawCategory)
+}
+
 const buildProductPayload = (shop, brand, product) => {
-  const tags = parseShopifyTags(product.tags).filter(isUsefulShopifyTag)
-  const firstVariant = product.variants?.[0]
+  const tags = Array.isArray(product.tags)
+    ? product.tags.filter(isUsefulShopifyTag)
+    : parseShopifyTags(product.tags).filter(isUsefulShopifyTag)
+  const firstVariant = product.variants?.[0] || firstGraphqlNode(product.variants)
   const price = Number(firstVariant?.price || 0)
-  const imageUrl = product.image?.src || product.images?.[0]?.src || null
- const rawCategory =
-  product.category?.name ||
-  product.category?.fullName ||
-  product.category ||
-  product.product_category ||
-  product.product_type ||
-  brand.product_category ||
-  'general'
-
-const category =
-String(rawCategory).trim()
-    console.log(
-    'PRODUCT:',
-    product.title
-    )
-
-    console.log(
-    'product_type:',
-    product.product_type
-    )
-
-    console.log(
-    'category:',
-    product.category
-    )
-
-    console.log(
-    'product_category:',
-    product.product_category
-    )
+  const graphqlImage = product.featuredImage?.url || firstGraphqlNode(product.images)?.url
+  const imageUrl = product.image?.src || product.images?.[0]?.src || graphqlImage || null
+  const category = getProductCategory(product, brand)
 
   return {
     brand_id: brand.brand_id,
     name: product.title || 'Untitled product',
     category,
-    description: stripHtml(product.body_html),
+    description: stripHtml(product.body_html || product.descriptionHtml),
     recommendation_step: 1,
     recommended_timing: 'As needed',
     how_to_use: 'Use as directed by the brand.',
@@ -381,10 +425,10 @@ String(rawCategory).trim()
     image_url: imageUrl,
     product_url: shopifyProductUrl(shop, product),
     suitable_customer_attributes: tags,
-    external_product_id: product.id ? String(product.id) : null,
+    external_product_id: product.legacyResourceId ? String(product.legacyResourceId) : (product.id ? String(product.id) : null),
     vendor: product.vendor || null,
     product_tags: tags,
-    is_active: product.status !== 'archived'
+    is_active: String(product.status || '').toLowerCase() !== 'archived'
   }
 }
 
@@ -414,9 +458,12 @@ const ensureProductMatchTags = async (productId, product, payload) => {
   if (countError) throw countError
   if (count) return
 
-  const tags = parseShopifyTags(product.tags).filter(isUsefulShopifyTag)
+  const tags = Array.isArray(product.tags)
+    ? product.tags.filter(isUsefulShopifyTag)
+    : parseShopifyTags(product.tags).filter(isUsefulShopifyTag)
   const concerns = [
     ...tags,
+    product.productType,
     product.product_type,
     product.vendor,
     payload.category
@@ -468,6 +515,37 @@ const saveShopifyProducts = async (shop, brand, shopifyProducts) => {
   }
 
   return savedCount
+}
+
+const inferSyncedProductCategory = (brand, shopifyProducts) => {
+  const categoryCounts = new Map()
+
+  for (const product of shopifyProducts) {
+    const category = getProductCategory(product, { ...brand, product_category: null })
+    if (!category || isDefaultCategory(category)) continue
+    categoryCounts.set(category, (categoryCounts.get(category) || 0) + 1)
+  }
+
+  return [...categoryCounts.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .map(([category]) => category)[0] || null
+}
+
+const syncBrandCategoryFromProducts = async (brand, shopifyProducts) => {
+  if (!isDefaultCategory(brand.product_category)) return brand.product_category
+
+  const inferredCategory = inferSyncedProductCategory(brand, shopifyProducts)
+  if (!inferredCategory) return brand.product_category || 'general'
+
+  const { error } = await supabase
+    .from('brands')
+    .update({ product_category: inferredCategory })
+    .eq('brand_id', brand.brand_id)
+
+  if (error) throw error
+
+  brand.product_category = inferredCategory
+  return inferredCategory
 }
 
 const renderShopifyAppHome = (res, dashboard) => {
@@ -1449,23 +1527,12 @@ const syncShopifyProducts = async (req, res) => {
     const liveToken = await getValidAccessToken(shop)
     if (!liveToken) return res.status(401).send('Shop access token missing or invalid. Re-install the app.')
 
-    console.log('BEFORE FETCH')
-
-const shopifyProducts =
-  await fetchShopifyProducts(
-    shop,
-    liveToken
-  )
-
-console.log('AFTER FETCH')
-console.log(
-  'Products:',
-  shopifyProducts.length
-)
+    const shopifyProducts = await fetchShopifyProducts(shop, liveToken)
+    const syncedCategory = await syncBrandCategoryFromProducts(store.brands, shopifyProducts)
     const savedCount = await saveShopifyProducts(shop, store.brands, shopifyProducts)
 
     try {
-      await generateQuestionFlowForBrand(store.brands, store.brands.product_category || 'general')
+      await generateQuestionFlowForBrand(store.brands, syncedCategory || 'general')
       res.redirect(`${appUrl}/shopify?shop=${encodeURIComponent(shop)}&synced=${savedCount}`)
     } catch (questionError) {
       console.error('Shopify automatic question generation error:', questionError)
