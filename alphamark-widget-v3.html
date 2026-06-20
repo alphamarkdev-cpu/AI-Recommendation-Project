@@ -376,6 +376,14 @@ body{background:#f3f1ec;color:var(--text);overflow:hidden;}
 .life-card-title{font-size:17px;font-weight:800;color:var(--text);line-height:1.25;margin-bottom:9px;}
 .life-action{font-size:14px;line-height:1.5;color:#26362f;margin-bottom:8px;}
 .life-reason{font-size:13px;line-height:1.5;color:var(--text2);}
+.product-panel{width:100%;border:1px solid rgba(23,63,49,.12);border-radius:30px;padding:24px;background:#fff;box-shadow:0 18px 54px rgba(17,21,19,.06);}
+.product-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(260px,100%),1fr));gap:16px;}
+.product-grid .step-card{height:100%;display:flex;flex-direction:column;gap:16px;padding:16px;border-radius:20px;border-color:rgba(23,63,49,.12);}
+.product-grid .step-product{font-size:18px;line-height:1.25;margin-bottom:7px;}
+.product-grid .step-category{font-size:11px;margin-bottom:12px;color:var(--accent);}
+.product-grid .step-how{font-size:15px;line-height:1.55;margin-bottom:10px;padding:12px 14px;border-radius:16px;background:#edf5f1;color:#25362f;}
+.product-grid .step-why{font-size:14px;line-height:1.6;color:var(--text2);}
+.product-grid .step-num{position:absolute;top:10px;left:10px;z-index:1;border-radius:999px;}
 .res-foot{padding:18px clamp(28px,8vw,120px) 26px;background:#fff;}
 .restart-btn{max-width:360px;}
 .error-actions{margin-top:28px;}
@@ -1202,6 +1210,9 @@ function buildAdditionalInfo(){
 function showResult(rec, productImages={}, productUrls={}, usage={}){
   showScreen('result')
   const body=document.getElementById('result-body')
+  const morningRoutine = normaliseRoutineSteps(rec.morning_routine)
+  const eveningRoutine = normaliseRoutineSteps(rec.evening_routine)
+  const recommendedProducts = normaliseRecommendedProducts(rec.recommended_products)
 
   // concern badges
   const badges=[answers.profile_type || answers.skin_type, answers.primary_concern || answers.concern || answers.skin_concern, answers.age].filter(Boolean)
@@ -1221,25 +1232,25 @@ function showResult(rec, productImages={}, productUrls={}, usage={}){
 
   const routinePanels = []
 
-  if(rec.morning_routine?.length){
+  if(morningRoutine.length){
     routinePanels.push(routinePanel({
       type: 'am',
       kicker: 'AM Routine',
       title: 'Morning routine',
       note: 'Start here and follow the flow from left to right for an easy day routine.',
-      steps: rec.morning_routine,
+      steps: morningRoutine,
       productImages,
       productUrls
     }))
   }
 
-  if(rec.evening_routine?.length){
+  if(eveningRoutine.length){
     routinePanels.push(routinePanel({
       type: 'pm',
       kicker: 'PM Routine',
       title: 'Evening routine',
       note: 'Use this before sleep so the selected products can support your routine overnight.',
-      steps: rec.evening_routine,
+      steps: eveningRoutine,
       productImages,
       productUrls
     }))
@@ -1248,6 +1259,9 @@ function showResult(rec, productImages={}, productUrls={}, usage={}){
   if(routinePanels.length){
     const compactClass = routinePanels.every(panel=>panel.count === 1) ? ' compact' : ''
     html+=`<div class="routine-board${compactClass}">${routinePanels.map(panel=>panel.html).join('')}</div>`
+  }
+  else if(recommendedProducts.length){
+    html+=recommendedProductsSection(recommendedProducts, productImages, productUrls)
   }
 
   const lifestyleItems = normaliseLifestyleRecommendations(rec.lifestyle_recommendations, rec.tips)
@@ -1263,6 +1277,33 @@ function showResult(rec, productImages={}, productUrls={}, usage={}){
   html+=`</div>`
   body.innerHTML=html
   body.scrollTop=0
+}
+
+// Converts routine output into the field names used by the result cards.
+function normaliseRoutineSteps(steps=[]){
+  if(!Array.isArray(steps)) return []
+  return steps.map((step, idx)=>({
+    step: step.step || idx + 1,
+    product_name: step.product_name || step.name || step.product || '',
+    category: step.category || '',
+    how_to_use: step.how_to_use || step.usage || step.instruction || '',
+    why_chosen: step.why_chosen || step.why_this_step || step.reason || '',
+    when_to_apply: step.when_to_apply || step.time_to_apply || step.recommended_timing || ''
+  })).filter(step=>step.product_name || step.how_to_use || step.why_chosen)
+}
+
+// Converts plain recommended products into displayable cards when no routine arrays are returned.
+function normaliseRecommendedProducts(products=[]){
+  if(!Array.isArray(products)) return []
+  return products.slice(0,4).map((product, idx)=>({
+    step: idx + 1,
+    product_name: product.product_name || product.name || product.product || '',
+    category: product.category || '',
+    price: product.price || '',
+    how_to_use: product.how_to_use || product.usage || product.instruction || '',
+    why_chosen: product.why_chosen || product.reason || product.why || '',
+    when_to_apply: product.when_to_apply || product.time_to_apply || product.recommended_timing || ''
+  })).filter(product=>product.product_name || product.how_to_use || product.why_chosen)
 }
 
 // Renders 2-3 extra stored questions when photo evidence conflicts with text answers.
@@ -1436,6 +1477,24 @@ function lifestyleSection(items){
             ${item.reason?`<div class="life-reason">${item.reason}</div>`:''}
           </div>
         `).join('')}
+      </div>
+    </div>
+  `
+}
+
+// Shows recommended products and usage instructions if the AI did not return routine arrays.
+function recommendedProductsSection(products, productImages, productUrls){
+  return `
+    <div class="product-panel">
+      <div class="life-head">
+        <div>
+          <div class="life-kicker">Recommended products</div>
+          <div class="life-title">How to use your picks</div>
+        </div>
+        <div class="life-note">These are the selected products from your recommendation, with usage guidance from the product plan.</div>
+      </div>
+      <div class="product-grid">
+        ${products.map(product=>stepCard(product, productImages, productUrls)).join('')}
       </div>
     </div>
   `
