@@ -177,7 +177,7 @@ const getRecommendation = async (req, res) => {
       advisorConfig.recommendation_style ||
             'products'
       const isRoutineCategory =
-      recommendationStyle === 'routine'
+      requiresRoutine || recommendationStyle === 'routine'
 
       const isProductCategory =
       recommendationStyle === 'products'
@@ -280,7 +280,8 @@ TASK:
 6. Select the best 3-4 products.
 7. Never invent products.
 8. Avoid products containing restricted materials or ingredients.
-9. Keep all responses short and consumer friendly.
+9. Use product how_to_use, recommendation_step, and recommended_timing from AVAILABLE PRODUCTS when creating usage instructions.
+10. Keep all responses short and consumer friendly.
 
 OUTPUT RULES:
 
@@ -323,7 +324,7 @@ Product format:
   "category":"",
   "price":0,
   "why_chosen":"",
-  "how_to_use":""
+  "how_to_use":"Use the product's how_to_use from AVAILABLE PRODUCTS, rewritten briefly for this consumer."
 }
 
 ${
@@ -331,8 +332,24 @@ isRoutineCategory
 ? `
 For routine categories also return:
 
-morning_routine:[]
-evening_routine:[]
+morning_routine:
+2-4 items. Each item must be:
+{
+  "step":1,
+  "product_name":"",
+  "how_to_use":"",
+  "why_this_step":""
+}
+
+evening_routine:
+2-4 items. Each item must be:
+{
+  "step":1,
+  "product_name":"",
+  "how_to_use":"",
+  "why_this_step":""
+}
+
 tips:
 exactly 3 items.
 
