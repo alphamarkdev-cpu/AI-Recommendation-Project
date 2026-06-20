@@ -219,6 +219,44 @@ const buildQuestionResponse = (brandCategory, poolQuestions, selectedIds = [], r
 // Returns fixed personal and lifestyle questions in the order they should appear in the widget.
 // Returns the active pre-generated question flow for the authenticated brand and category.
 // Builds a compact catalog-aware fallback flow when Gemini generation is unavailable.
+const parseJsonColumn = (value, fallback) => {
+  if (!value) return fallback
+  if (typeof value !== 'string') return value
+
+  try {
+    return JSON.parse(value)
+  } catch (error) {
+    return fallback
+  }
+}
+
+const getActiveFlowQuestions = async (brandId, category) => {
+  const { data, error } = await supabase
+    .from('brand_question_flows')
+    .select('questions_json')
+    .eq('brand_id', brandId)
+    .eq('category', category)
+    .eq('is_active', true)
+    .order('version', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  if (error) throw error
+
+  const questionsJson = parseJsonColumn(data?.questions_json, [])
+  const questions = Array.isArray(questionsJson)
+    ? questionsJson
+    : questionsJson.questions || []
+
+  return questions.map((question, index) => ({
+    ...question,
+    question_id: question.question_id || question.id || `dynamic_${index + 1}`,
+    field_key: question.field_key || question.question_id || question.id || `dynamic_${index + 1}`,
+    category: question.category || category,
+    section_label: question.section_label || 'Assessment'
+  }))
+}
+
 const compactText = (value, maxLength = 160) => String(value || '')
   .replace(/\s+/g, ' ')
   .trim()
@@ -1302,7 +1340,25 @@ const selectDynamicQuestions = async (req, res) => {
     poolQuestions = data || []
 
     if (!poolQuestions || poolQuestions.length === 0) {
+      let flowQuestions = await getActiveFlowQuestions(req.brand.brand_id, brand_category)
+
+      if (!flowQuestions.length) {
+        await generateQuestionFlowForBrand(req.brand, brand_category)
+        flowQuestions = await getActiveFlowQuestions(req.brand.brand_id, brand_category)
+      }
+
+      if (flowQuestions.length) {
+        return res.json(buildQuestionResponse(
+          brand_category,
+          flowQuestions,
+          flowQuestions.slice(0, 5).map(question => question.question_id),
+          {},
+          emptyUsage
+        ))
+      }
+
       return res.status(404).json({
+        success: false,
         error: `No questions found for category: ${brand_category}`
       })
     }

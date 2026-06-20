@@ -8,6 +8,17 @@ const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY)
 
 const asArray = value => Array.isArray(value) ? value : []
 
+const parseJsonColumn = (value, fallback) => {
+  if (!value) return fallback
+  if (typeof value !== 'string') return value
+
+  try {
+    return JSON.parse(value)
+  } catch (error) {
+    return fallback
+  }
+}
+
 const parseGeminiJson = text => {
   const cleaned = String(text || '').replace(/```json|```/g, '').trim()
 
@@ -63,9 +74,10 @@ const getClarificationCandidates = async (brandId, category, answeredFields = []
 
   if (error) throw error
 
-  const questions = Array.isArray(data?.questions_json)
-    ? data.questions_json
-    : []
+  const questionsJson = parseJsonColumn(data?.questions_json, [])
+  const questions = Array.isArray(questionsJson)
+    ? questionsJson
+    : questionsJson.questions || []
   const answered = new Set(answeredFields.filter(Boolean))
 
   return questions
@@ -122,11 +134,9 @@ const getRecommendation = async (req, res) => {
 
     if (flowError) throw flowError
 
-    const advisorConfig =
-    flowConfig?.advisor_config || {}
+    const advisorConfig = parseJsonColumn(flowConfig?.advisor_config, {})
 
-    const recommendationSchema =
-    flowConfig?.recommendation_schema || {}
+    const recommendationSchema = parseJsonColumn(flowConfig?.recommendation_schema, {})
 
     if (!process.env.GEMINI_API_KEY) {
       return res.status(500).json({ error: 'GEMINI_API_KEY is not configured on this deployment.' })
@@ -204,6 +214,20 @@ const getRecommendation = async (req, res) => {
       productImages[p.name] = p.image_url  || null
       productUrls[p.name]   = p.product_url || null
     })
+
+    const aiWeights =
+      recommendationSchema.weights ||
+      advisorConfig.recommendation_weights ||
+      advisorConfig.weights ||
+      {}
+
+    const aiProducts = productsContext.slice(0, 20)
+    const aiClarifications = clarificationCandidates.map(question => ({
+      field_key: question.field_key,
+      question_text: question.question_text,
+      input_type: question.input_type,
+      options_json: question.options_json
+    }))
 
     // Step 4: Clean AI prompt .
  const prompt = `
