@@ -58,6 +58,13 @@ const GENERIC_CATALOG_SIGNAL_PATTERNS = [
   /^hidden[_\s-]*product$/i,
   /^general$/i,
   /^taupe/i,
+  /^mytaupe$/i,
+  /prepaid/i,
+  /discount/i,
+  /combo/i,
+  /kit/i,
+  /sets?$/i,
+  /party supplies/i,
   /collection/i,
   /^new$/i,
   /^best sellers?$/i,
@@ -88,6 +95,24 @@ const categoryIncludes = (category, terms) => {
   const normalized = String(category || '').toLowerCase()
   return terms.some(term => normalized.includes(term))
 }
+
+const isProblemSolvingCategory = category =>
+  categoryIncludes(category, [
+    'skin',
+    'beauty',
+    'cosmetic',
+    'hair',
+    'scalp',
+    'wellness',
+    'supplement',
+    'nutrition'
+  ])
+
+const isSkinCategory = category =>
+  categoryIncludes(category, ['skin', 'beauty', 'cosmetic'])
+
+const isHairCategory = category =>
+  categoryIncludes(category, ['hair', 'scalp', 'shampoo'])
 
 const categoryFallbackGoals = category => {
   if (categoryIncludes(category, ['skin', 'beauty', 'cosmetic'])) {
@@ -301,6 +326,66 @@ const buildCatalogProfile = (products, catalogueSignals) => {
 }
 
 const buildFallbackFlow = (category, products, seed = 0) => {
+  if (isSkinCategory(category)) {
+    const questions_json = [
+      { question_id: 'q1', field_key: 'primary_concern', question_text: 'What skin concern do you want to improve first?', sub_text: 'Pick the issue you want the routine to focus on.', input_type: 'chips', options_json: ['Acne or breakouts', 'Tan or pigmentation', 'Blackheads or clogged pores', 'Dullness or uneven glow', 'Dryness or dehydration', 'Sensitivity or irritation'], category, section_label: 'Assessment' },
+      { question_id: 'q2', field_key: 'skin_type', question_text: 'How does your skin usually feel during the day?', sub_text: 'This helps us choose products that suit your skin behavior.', input_type: 'cards', options_json: [{ label: 'Oily', emoji: '', sub: 'Gets shiny or greasy' }, { label: 'Dry', emoji: '', sub: 'Feels tight or flaky' }, { label: 'Combination', emoji: '', sub: 'Oily T-zone, dry cheeks' }, { label: 'Sensitive', emoji: '', sub: 'Reacts easily' }, { label: 'Not sure', emoji: '', sub: 'Need guidance' }], category, section_label: 'Assessment' },
+      { question_id: 'q3', field_key: 'concern_severity', question_text: 'How intense is this concern right now?', sub_text: 'Use 1 for mild and 5 for severe.', input_type: 'scale', options_json: [1, 2, 3, 4, 5], category, section_label: 'Assessment' },
+      { question_id: 'q4', field_key: 'concern_duration', question_text: 'How long have you noticed this concern?', sub_text: 'Duration helps us keep the recommendation realistic.', input_type: 'chips', options_json: ['Less than 2 weeks', '2-6 weeks', '2-6 months', 'More than 6 months', 'It comes and goes'], category, section_label: 'Assessment' },
+      { question_id: 'q5', field_key: 'current_routine', question_text: 'What do you currently use on your skin?', sub_text: 'Mention cleanser, mask, moisturizer, sunscreen, or treatments.', input_type: 'text', options_json: { placeholder: 'Example: face wash daily, mask once a week, no sunscreen...' }, category, section_label: 'Assessment' },
+      { question_id: 'q6', field_key: 'triggers', question_text: 'What seems to trigger or worsen it?', sub_text: 'Choose what applies most often.', input_type: 'chips', options_json: ['Sun exposure', 'Sweat or pollution', 'Stress or sleep', 'New products', 'Periods or hormones', 'Not sure'], category, section_label: 'Assessment' },
+      { question_id: 'q7', field_key: 'allergies', question_text: 'Any ingredients or product types your skin reacts to?', sub_text: 'This helps us avoid poor-fit recommendations.', input_type: 'text', options_json: { placeholder: 'Write none if there are no known reactions' }, category, section_label: 'Assessment' },
+      { question_id: 'q8', field_key: 'budget', question_text: 'What budget range should we stay within?', sub_text: 'We will keep the routine practical.', input_type: 'chips', options_json: ['Under 500', '500-1000', '1000-2000', 'No strict budget'], category, section_label: 'Assessment' }
+    ]
+
+    return {
+      questions_json,
+      flow_json: buildLinearFlow(questions_json),
+      advisor_config: {
+        requires_photo: true,
+        photo_reason: 'skin concern analysis',
+        requires_routine: true,
+        recommendation_style: 'routine'
+      },
+      recommendation_schema: {
+        primary_concern_weight: 0.35,
+        profile_weight: 0.2,
+        photo_weight: 0.25,
+        budget_weight: 0.2
+      }
+    }
+  }
+
+  if (isHairCategory(category)) {
+    const questions_json = [
+      { question_id: 'q1', field_key: 'primary_concern', question_text: 'What hair or scalp problem do you want to improve first?', sub_text: 'Pick the issue the routine should focus on.', input_type: 'chips', options_json: ['Hair fall', 'Dandruff or flakes', 'Dry or itchy scalp', 'Frizz', 'Damage or breakage', 'Low volume'], category, section_label: 'Assessment' },
+      { question_id: 'q2', field_key: 'hair_type', question_text: 'Which best describes your hair or scalp?', sub_text: 'This helps us choose the right product type.', input_type: 'cards', options_json: [{ label: 'Oily scalp', emoji: '', sub: '' }, { label: 'Dry scalp', emoji: '', sub: '' }, { label: 'Curly or wavy', emoji: '', sub: '' }, { label: 'Chemically treated', emoji: '', sub: '' }, { label: 'Not sure', emoji: '', sub: '' }], category, section_label: 'Assessment' },
+      { question_id: 'q3', field_key: 'concern_severity', question_text: 'How intense is this concern right now?', sub_text: 'Use 1 for mild and 5 for severe.', input_type: 'scale', options_json: [1, 2, 3, 4, 5], category, section_label: 'Assessment' },
+      { question_id: 'q4', field_key: 'wash_frequency', question_text: 'How often do you wash your hair?', sub_text: 'Routine frequency changes product recommendations.', input_type: 'chips', options_json: ['Daily', '2-3 times a week', 'Once a week', 'Less than once a week'], category, section_label: 'Assessment' },
+      { question_id: 'q5', field_key: 'current_routine', question_text: 'What hair products are you using now?', sub_text: 'Mention shampoo, oil, serum, mask, or treatments.', input_type: 'text', options_json: { placeholder: 'Example: anti-dandruff shampoo, hair oil weekly...' }, category, section_label: 'Assessment' },
+      { question_id: 'q6', field_key: 'triggers', question_text: 'What seems to worsen the problem?', sub_text: 'Choose what applies most often.', input_type: 'chips', options_json: ['Heat styling', 'Sweat or pollution', 'Stress', 'Coloring or chemicals', 'Weather change', 'Not sure'], category, section_label: 'Assessment' },
+      { question_id: 'q7', field_key: 'allergies', question_text: 'Any ingredients or product types you avoid?', sub_text: 'This helps us avoid poor-fit recommendations.', input_type: 'text', options_json: { placeholder: 'Write none if there are no restrictions' }, category, section_label: 'Assessment' },
+      { question_id: 'q8', field_key: 'budget', question_text: 'What budget range should we stay within?', sub_text: 'We will keep the routine practical.', input_type: 'chips', options_json: ['Under 500', '500-1000', '1000-2000', 'No strict budget'], category, section_label: 'Assessment' }
+    ]
+
+    return {
+      questions_json,
+      flow_json: buildLinearFlow(questions_json),
+      advisor_config: {
+        requires_photo: false,
+        photo_reason: null,
+        requires_routine: true,
+        recommendation_style: 'routine'
+      },
+      recommendation_schema: {
+        primary_concern_weight: 0.4,
+        profile_weight: 0.25,
+        budget_weight: 0.2,
+        routine_weight: 0.15
+      }
+    }
+  }
+
   const concernSet = new Set()
   const typeSet = new Set()
 
@@ -500,6 +585,31 @@ const assertGeneratedQuestionBank = questions => {
   const primaryConcernOptions = optionLabels(questions[0])
   if (primaryConcernOptions.length < 3) {
     throw new Error('Gemini primary_concern question must include at least 3 concern options.')
+  }
+}
+
+const assertCategoryQuestionIntent = (questions, category) => {
+  if (!isProblemSolvingCategory(category)) return
+
+  const forbiddenOptionPattern = /\b(mask|face wash|cleanser|combo|kit|set|discount|prepaid|collection|gift|party|premium feel|style|look)\b/i
+  const primaryConcernOptions = optionLabels(questions[0])
+  const badOptions = primaryConcernOptions.filter(option => forbiddenOptionPattern.test(option))
+
+  if (badOptions.length) {
+    throw new Error(`Problem-solving categories must ask concerns, not catalog labels. Bad q1 options: ${badOptions.join(', ')}`)
+  }
+
+  const questionText = questions
+    .slice(0, 6)
+    .map(question => `${question.question_text || ''} ${question.field_key || ''}`)
+    .join(' ')
+    .toLowerCase()
+
+  const problemSignals = ['concern', 'problem', 'severity', 'duration', 'trigger', 'skin type', 'hair type', 'scalp', 'routine', 'allerg']
+  const hasProblemAssessment = problemSignals.some(signal => questionText.includes(signal))
+
+  if (!hasProblemAssessment) {
+    throw new Error('Problem-solving category question bank is missing concern/severity/routine assessment questions.')
   }
 }
 
@@ -767,10 +877,15 @@ CATEGORY HINTS:
 skincare:
 skin_type, concern, sensitivity,
 ingredient_avoidance, routine.
+For skincare, q1 must ask the skin problem/concern, not the product family.
+Good q1 options: acne, tan/pigmentation, blackheads, dullness, dryness, sensitivity.
+Bad q1 options: masks, face wash, combos, kits, discounts, collection names.
 
 haircare:
 hair_type, scalp_condition,
 goal, wash_frequency.
+For haircare, q1 must ask the hair/scalp problem, not the product family.
+Good q1 options: hair fall, dandruff, itchy scalp, frizz, damage, low volume.
 
 accessories:
 occasion, style, material,
@@ -789,18 +904,22 @@ RULES:
 1. Choose dimensions that distinguish
 actual SKUs.
 
-2. Do not force skincare dimensions
+2. For skincare, haircare, wellness, supplements, or any category that cures/supports a problem:
+- ask the consumer's problem, severity, duration, triggers, restrictions, current routine, and budget.
+- do not ask buying style, taste, occasion, gifting, premium feel, or style unless the catalog is actually fashion/accessories.
+
+3. Do not force skincare dimensions
 onto non-skincare categories.
 
-3. Ask about allergies/materials
+4. Ask about allergies/materials
 only when relevant.
 
-4. Prefer shopper language.
+5. Prefer shopper language.
 
-5. Avoid dimensions that would not
+6. Avoid dimensions that would not
 change recommendations.
 
-6. Include dimensions that can later
+7. Include dimensions that can later
 be mapped to product tags or
 match tags.
 
@@ -883,13 +1002,21 @@ ${JSON.stringify({
 TASK:
 Create a routed question bank that helps shoppers choose products from this catalog.
 
+IMPORTANT CATEGORY BEHAVIOR:
+If CATEGORY is skincare, haircare, wellness, supplements, or any problem-solving product category:
+- The quiz must behave like a problem assessment, not a shopping preference survey.
+- Ask what problem the consumer wants to solve, how severe it is, how long it has been happening, what triggers it, current routine, allergies/restrictions, lifestyle context, and budget.
+- Never use Shopify collection labels, product types, discount tags, bundles, kit names, or product family names as primary concern options.
+- Do not ask "buying style", "perfect match", "premium feel", "style or look", "occasion", or "gift" unless the category is fashion/accessories/gifts.
+
 RULES:
 
 1. Generate exactly ${GENERATED_QUESTION_COUNT} questions.
 
 2. q1:
 - field_key: primary_concern
-- ask buying goal, need, occasion, style, or use case
+- ask the primary concern/problem for problem-solving categories
+- ask buying goal, occasion, style, or use case only for non-problem categories
 - minimum 4 options
 
 3. q2-q10:
@@ -983,11 +1110,10 @@ Return ONLY valid JSON.
 
       try {
         assertGeneratedQuestionBank(questions)
+        assertCategoryQuestionIntent(questions, category)
       } catch (qualityError) {
-        if (questions.length >= MIN_GENERATED_QUESTIONS) throw qualityError
-
         const retryPrompt = `
-Your previous response returned only ${questions.length} usable questions.
+Your previous response was not acceptable: ${qualityError.message}
 
 Regenerate the complete question bank now.
 
@@ -996,10 +1122,13 @@ Rules:
 - Top-level key must be "questions_json".
 - questions_json must contain exactly ${GENERATED_QUESTION_COUNT} complete question objects.
 - Use question_id values q1 through q${GENERATED_QUESTION_COUNT} with no gaps.
-- q1 field_key must be "primary_concern" and must ask the shopper's primary buying goal or requirement.
-- q1 must have at least 4 catalog-supported goal/use-case/style/product-family options.
+- q1 field_key must be "primary_concern".
+- For skincare, haircare, wellness, supplements, or problem-solving categories, q1 must ask the consumer's problem/concern, not product family or buying style.
+- q1 must have at least 4 useful concern/problem options.
 - q2-q10 must be category-specific product-selection follow-up questions grounded in the catalog.
-- q11-q14 must be shared final purchase-fit questions: budget, constraints, gifting/self-use, avoided materials/ingredients, sizing/compatibility, usage habits, or previous products tried.
+- q11-q14 must be shared final fit questions. For problem-solving categories use budget, allergies/restrictions, current routine, previous products tried, lifestyle, or usage habits.
+- Do not use Shopify labels, discount tags, collection names, combos, kits, sets, or product types as concern options.
+- Do not ask buying style, perfect match, premium feel, style/look, occasion, or gifting unless this is a fashion/accessory/gift category.
 - Use only input_type: "chips", "cards", "scale", "text".
 - Do not include markdown or explanations.
 
@@ -1017,6 +1146,7 @@ Rules:
         questionsResponse = await parseJsonResponseWithRepair(model, questionsResult.response.text())
         questions = normaliseGeneratedQuestions(extractQuestionsFromAi(questionsResponse), category)
         assertGeneratedQuestionBank(questions)
+        assertCategoryQuestionIntent(questions, category)
       }
 
       const flowPrompt = `
