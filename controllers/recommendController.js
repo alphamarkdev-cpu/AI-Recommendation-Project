@@ -19,17 +19,54 @@ const parseJsonColumn = (value, fallback) => {
   }
 }
 
+const extractFirstJsonObject = text => {
+  const start = text.indexOf('{')
+  if (start === -1) return null
+
+  let depth = 0
+  let inString = false
+  let escaped = false
+
+  for (let index = start; index < text.length; index += 1) {
+    const char = text[index]
+
+    if (escaped) {
+      escaped = false
+      continue
+    }
+
+    if (char === '\\' && inString) {
+      escaped = true
+      continue
+    }
+
+    if (char === '"') {
+      inString = !inString
+      continue
+    }
+
+    if (inString) continue
+
+    if (char === '{') depth += 1
+    if (char === '}') depth -= 1
+
+    if (depth === 0) {
+      return text.slice(start, index + 1)
+    }
+  }
+
+  return null
+}
+
 const parseGeminiJson = text => {
   const cleaned = String(text || '').replace(/```json|```/g, '').trim()
 
   try {
     return JSON.parse(cleaned)
   } catch (error) {
-    const start = cleaned.indexOf('{')
-    const end = cleaned.lastIndexOf('}')
-
-    if (start === -1 || end === -1 || end <= start) throw error
-    return JSON.parse(cleaned.slice(start, end + 1))
+    const firstObject = extractFirstJsonObject(cleaned)
+    if (!firstObject) throw error
+    return JSON.parse(firstObject)
   }
 }
 
@@ -437,7 +474,12 @@ Return ONLY valid JSON.
 `
 
     // Step 5: Call Gemini
-    const model  = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' })
+    const model  = genAI.getGenerativeModel({
+      model: 'gemini-2.5-flash',
+      generationConfig: {
+        responseMimeType: 'application/json'
+      }
+    })
     const request = photoImage
       ? [
           { text: prompt },
