@@ -1169,6 +1169,17 @@ async function analyse(){
     try { data = raw ? JSON.parse(raw) : {} } catch(e) { data = { error: raw || `Request failed with status ${res.status}` } }
 
     if(!res.ok){
+      if(data.photo_verification?.blocked) showPhotoMismatchError(data.error)
+      else showError(data.error || data.message || `Recommendation request failed with status ${res.status}`)
+      return
+    }
+
+    if(data.photo_verification?.blocked){
+      showPhotoMismatchError(data.error)
+      return
+    }
+
+    if(!data.success && data.error){
       showError(data.error || `Recommendation request failed with status ${res.status}`)
       return
     }
@@ -1182,10 +1193,9 @@ async function analyse(){
       logSessionTokenUsage()
       showResult(data.recommendation, data.product_images || {}, data.product_urls || {}, tokenUsage)
     }
-    else if(data.photo_verification?.blocked) showPhotoMismatchError(data.error)
     else showError(data.error)
   } catch(e){
-    showError(`Could not connect to recommendation server at ${API}.`)
+    showError(`Could not connect to recommendation server at ${API}. ${e.message || ''}`.trim())
   }
 }
 
