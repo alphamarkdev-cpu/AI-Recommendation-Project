@@ -342,7 +342,7 @@ const buildFallbackFlow = (category, products, seed = 0) => {
       questions_json,
       flow_json: buildLinearFlow(questions_json),
       advisor_config: {
-        requires_photo: true,
+        requires_photo: false,
         photo_reason: 'skin concern analysis',
         requires_routine: true,
         recommendation_style: 'routine'
@@ -1263,13 +1263,13 @@ ${JSON.stringify(catalogProfile, null, 2)}
 
 Your task:
 
-1. Decide whether recommendations need photo analysis.
+1. Decide whether recommendations can use optional photo analysis.
 
 Examples:
-- skincare → yes
-- makeup → yes
-- accessories → yes
-- eyewear → yes
+- skincare → optional
+- makeup → optional
+- accessories → optional
+- eyewear → optional
 - supplements → no
 - electronics → no
 
@@ -1297,7 +1297,7 @@ Return ONLY JSON:
 
 {
   "advisor_config": {
-    "requires_photo": true,
+    "requires_photo": false,
     "photo_reason": "skin analysis",
     "requires_routine": true,
     "recommendation_style": "routine"

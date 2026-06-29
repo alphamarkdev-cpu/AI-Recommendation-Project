@@ -243,19 +243,6 @@ const getRecommendation = async (req, res) => {
     const profileTypes = Array.isArray(profileInput) ? profileInput : [profileInput]
     const concernsList = Array.isArray(concerns)  ? concerns  : [concerns]
     const photoImage = parseDataUrlImage(photo_image)
-        if (
-      advisorConfig.requires_photo &&
-      !photoImage
-    ) {
-      return res.status(400).json({
-        success: false,
-        error:
-          `This ${brandCategory} assessment requires a photo.`,
-        requires_photo: true,
-        photo_reason:
-          advisorConfig.photo_reason
-      })
-    }
     const hasClarificationAnswers = clarification_answers &&
       typeof clarification_answers === 'object' &&
       Object.keys(clarification_answers).length > 0
@@ -373,7 +360,7 @@ TASK
 
 1. Understand the customer's profile, concerns and preferences.
 
-2. Validate whether the uploaded photo is useful for this product category.
+2. If a photo is uploaded, validate whether it is useful for this product category.
 
 3. Only analyze information that is visually relevant for this category.
 
@@ -410,7 +397,7 @@ Examples:
 
 Never infer personal attributes that are not clearly visible.
 
-4. Compare photo findings with questionnaire answers.
+4. If a photo is uploaded, compare photo findings with questionnaire answers.
 
 5. If answers conflict AND clarification answers do not exist:
    Ask ONLY 2–3 clarification questions from CLARIFICATION QUESTIONS.
