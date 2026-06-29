@@ -1407,39 +1407,7 @@ function recommendationBasisPanel(rec={}){
 }
 
 // Builds the small debug panel showing Gemini token usage for this session.
-function tokenUsagePanel(usage={}){
-  const q = usage.question_selection
-  const r = usage.recommendation
-  if(!q && !r) return ''
 
-  const questionTotal = q?.total_tokens || 0
-  const recommendationTotal = r?.total_tokens || 0
-  const total = questionTotal + recommendationTotal
-
-  return `
-    <div style="margin:16px 0;padding:14px 16px;border:1px solid var(--line);border-radius:8px;background:#fff;font-size:12px;color:var(--text2);line-height:1.7;">
-      <div style="font-weight:800;text-transform:uppercase;letter-spacing:.08em;color:var(--green);margin-bottom:6px;">AI Token Usage</div>
-      <div>Question selection: ${questionTotal}</div>
-      <div>Recommendation: ${recommendationTotal}</div>
-      <div style="font-weight:800;color:var(--text);">Session total: ${total}</div>
-    </div>
-  `
-}
-
-// Prints token usage rows to the browser console for debugging model cost.
-function logSessionTokenUsage(){
-  const q = tokenUsage.question_selection
-  const r = tokenUsage.recommendation
-  const rows = []
-
-  if(q) rows.push({ call: 'question_selection', ...q })
-  if(r) rows.push({ call: 'recommendation', ...r })
-
-  if(rows.length) {
-    console.table(rows)
-    console.log('Session total tokens:', (q?.total_tokens || 0) + (r?.total_tokens || 0))
-  }
-}
 
 // Converts AI lifestyle output or fallback tips into a consistent card data shape.
 function normaliseLifestyleRecommendations(items, fallbackTips=[]){
