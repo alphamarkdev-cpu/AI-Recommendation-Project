@@ -536,7 +536,10 @@ const WIDGET_PARAMS = new URLSearchParams(window.location.search)
 const EMBED_MODE = WIDGET_PARAMS.get('embed') === '1'
 const API   = WIDGET_PARAMS.get('api_url') || window.location.origin
 const SHOP  = WIDGET_PARAMS.get('shop') || WIDGET_PARAMS.get('shop_domain') || ''
-let AKEY  = WIDGET_PARAMS.get('brand_key') || ''
+let AKEY =
+  WIDGET_PARAMS.get('api_key') ||
+  WIDGET_PARAMS.get('brand_key') ||
+  ''
 let BCAT  = WIDGET_PARAMS.get('brand_category') || 'general'
 
 if(AKEY === 'test-api-key-001') AKEY = ''
