@@ -263,6 +263,26 @@ const normalizeBrandCategory = value => String(value || 'general')
 
 const isDefaultCategory = value => normalizeBrandCategory(value) === 'general'
 
+const ACCESSORY_CATEGORY_TERMS = [
+  'accessor',
+  'bag',
+  'duffel',
+  'handbag',
+  'hat',
+  'jewel',
+  'necklace',
+  'scarf',
+  'shawl',
+  'sunglass',
+  'wallet',
+  'watch'
+]
+
+const isAccessoryCategory = category => {
+  const normalized = normalizeBrandCategory(category)
+  return ACCESSORY_CATEGORY_TERMS.some(term => normalized.includes(term))
+}
+
 const stripHtml = value => String(value || '')
   .replace(/<script[\s\S]*?<\/script>/gi, ' ')
   .replace(/<style[\s\S]*?<\/style>/gi, ' ')
@@ -519,23 +539,46 @@ const saveShopifyProducts = async (shop, brand, shopifyProducts) => {
 
 const inferSyncedProductCategory = (brand, shopifyProducts) => {
   const categoryCounts = new Map()
+  let totalCategorizedProducts = 0
 
   for (const product of shopifyProducts) {
     const category = getProductCategory(product, { ...brand, product_category: null })
     if (!category || isDefaultCategory(category)) continue
+    totalCategorizedProducts += 1
     categoryCounts.set(category, (categoryCounts.get(category) || 0) + 1)
   }
 
-  return [...categoryCounts.entries()]
+  const sortedCategories = [...categoryCounts.entries()]
     .sort((a, b) => b[1] - a[1])
-    .map(([category]) => category)[0] || null
+  const uniqueCategories = sortedCategories.length
+  const accessoryProductCount = sortedCategories
+    .filter(([category]) => isAccessoryCategory(category))
+    .reduce((total, [, count]) => total + count, 0)
+
+  if (
+    uniqueCategories >= 3 &&
+    accessoryProductCount / totalCategorizedProducts >= 0.6
+  ) {
+    return 'accessories'
+  }
+
+  return sortedCategories.map(([category]) => category)[0] || null
 }
 
 const syncBrandCategoryFromProducts = async (brand, shopifyProducts) => {
-  if (!isDefaultCategory(brand.product_category)) return brand.product_category
-
   const inferredCategory = inferSyncedProductCategory(brand, shopifyProducts)
   if (!inferredCategory) return brand.product_category || 'general'
+
+  const currentCategory = normalizeBrandCategory(brand.product_category)
+  const shouldUpdateCategory =
+    isDefaultCategory(currentCategory) ||
+    (
+      inferredCategory === 'accessories' &&
+      isAccessoryCategory(currentCategory) &&
+      currentCategory !== inferredCategory
+    )
+
+  if (!shouldUpdateCategory) return brand.product_category
 
   const { error } = await supabase
     .from('brands')
