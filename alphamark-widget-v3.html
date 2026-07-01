@@ -1276,13 +1276,14 @@ function buildAdditionalInfo(){
 }
 
 // . SHOW RESULT .
-// Renders the final personalized report, routines, lifestyle cards, and token usage.
+// Renders the final personalized report, routines, lifestyle cards, and summary.
 function showResult(rec, productImages={}, productUrls={}, usage={}){
   showScreen('result')
   const body=document.getElementById('result-body')
   const morningRoutine = normaliseRoutineSteps(rec.morning_routine)
   const eveningRoutine = normaliseRoutineSteps(rec.evening_routine)
   const recommendedProducts = normaliseRecommendedProducts(rec.recommended_products)
+  const assessmentSummary = resultAssessmentSummary(rec)
 
   // concern badges
   const badges=[answers.profile_type || answers.skin_type, answers.primary_concern || answers.concern || answers.skin_concern, answers.age].filter(Boolean)
@@ -1293,11 +1294,10 @@ function showResult(rec, productImages={}, productUrls={}, usage={}){
     <div class="res-hero">
       <div class="res-hero-tag">Your Personalised ${categoryLabel(BCAT)} Report</div>
       <div class="res-hero-title">Your product plan is ready, ${answers.name||'friend'}</div>
-      <div class="res-hero-text">${rec.skin_assessment}</div>
+      <div class="res-hero-text">${assessmentSummary}</div>
       <div class="res-concern-row">${badgeHtml}</div>
     </div>
     ${recommendationBasisPanel(rec)}
-    ${tokenUsagePanel(usage)}
   `
 
   const routinePanels = []
@@ -1347,6 +1347,30 @@ function showResult(rec, productImages={}, productUrls={}, usage={}){
   html+=`</div>`
   body.innerHTML=html
   body.scrollTop=0
+}
+
+// Builds the short hero summary shown above the recommendation details.
+function resultAssessmentSummary(rec={}){
+  const raw = rec.customer_assessment || rec.skin_assessment || rec.assessment_summary || rec.summary
+
+  if(Array.isArray(raw)){
+    return raw
+      .filter(Boolean)
+      .map(item=>String(item).replace(/^[-•]\s*/, '').trim())
+      .slice(0,2)
+      .join(' ')
+  }
+
+  if(raw && String(raw).trim() && String(raw).trim() !== 'undefined'){
+    return String(raw).trim()
+  }
+
+  const concern = answers.primary_concern || answers.concern || answers.skin_concern || answers.goal || 'your selected concern'
+  const profile = answers.profile_type || answers.skin_type || answers.hair_type || answers.style_preference || ''
+  const severity = answers.concern_severity || answers.skin_severity || ''
+  const detail = severity ? ` with ${severity}/5 priority` : ''
+
+  return `We matched products for ${concern}${profile ? ` and your ${profile} profile` : ''}${detail}.`
 }
 
 // Converts routine output into the field names used by the result cards.
