@@ -18,6 +18,7 @@
     url.searchParams.set('brand_key', brandKey)
     url.searchParams.set('brand_category', category)
     url.searchParams.set('api_url', apiUrl)
+    if (shopDomain) url.searchParams.set('shop', shopDomain)
     return url.toString()
   }
 
@@ -84,7 +85,7 @@
 
   // Resolves the installed Shopify shop to its AlphaMark brand config.
   async function resolveShopBrandConfig() {
-    if (!shopDomain || (configuredBrandKey && configuredBrandKey !== 'test-api-key-001')) return
+    if (!shopDomain) return
 
     try {
       const response = await fetch(`${apiUrl}/api/shopify/brand-config?shop=${encodeURIComponent(shopDomain)}`)
