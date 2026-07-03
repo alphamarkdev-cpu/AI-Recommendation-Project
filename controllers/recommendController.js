@@ -705,6 +705,8 @@ res.json({
     productUrls,
   photo_used:
     Boolean(photoImage),
+  uploaded_photo_image:
+    photoImage ? photo_image : null,
   ai_usage:
     aiUsage
 })

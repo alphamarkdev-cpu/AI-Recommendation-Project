@@ -320,6 +320,14 @@ body{background:#f3f1ec;color:var(--text);overflow:hidden;}
 .res-hero-text{font-size:clamp(17px,1.5vw,21px);line-height:1.65;max-width:860px;margin:0 auto;color:rgba(255,255,255,.86);}
 .res-concern-row{justify-content:center;}
 .res-section{width:100%;padding:0;}
+.analysis-panel{width:100%;display:grid;grid-template-columns:minmax(220px,340px) 1fr;gap:20px;align-items:stretch;border:1px solid rgba(23,63,49,.12);border-radius:30px;padding:20px;background:#fff;box-shadow:0 18px 54px rgba(17,21,19,.06);}
+.analysis-photo{width:100%;min-height:220px;aspect-ratio:4/3;border-radius:22px;overflow:hidden;background:#f3f7f4;border:1px solid var(--border);}
+.analysis-photo img{width:100%;height:100%;object-fit:cover;display:block;}
+.analysis-copy{display:flex;flex-direction:column;justify-content:center;min-width:0;padding:4px 4px 4px 0;}
+.analysis-kicker{font-size:12px;font-weight:850;letter-spacing:.16em;text-transform:uppercase;color:var(--brand2);margin-bottom:8px;}
+.analysis-title{font-family:'Instrument Serif',serif;font-size:clamp(30px,3.2vw,44px);line-height:1;color:var(--text);margin-bottom:12px;}
+.analysis-text{font-size:15px;line-height:1.65;color:var(--text2);}
+.analysis-empty{width:100%;border:1px solid var(--border);border-radius:18px;padding:16px;background:#f7fbf9;color:var(--text2);font-size:13px;line-height:1.55;}
 .routine-board{width:100%;display:flex;flex-direction:column;gap:24px;}
 .routine-board.compact{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(420px,100%),1fr));align-items:stretch;}
 .routine-panel{width:100%;border:1px solid rgba(23,63,49,.12);border-radius:38px;padding:28px;background:linear-gradient(135deg,#ffffff,#f2f7f4);box-shadow:0 22px 70px rgba(17,21,19,.08);}
@@ -411,6 +419,9 @@ body{background:#f3f1ec;color:var(--text);overflow:hidden;}
   .btn-prev,.btn-next{min-width:auto;padding:0 12px;}
   .result-shell{width:calc(100% - 28px);margin:18px auto 28px;gap:16px;}
   .res-hero{border-radius:26px;padding:30px 20px;}
+  .analysis-panel{grid-template-columns:1fr;border-radius:26px;padding:16px;}
+  .analysis-photo{min-height:0;}
+  .analysis-copy{padding:0;}
   .routine-board,.routine-board.compact{display:flex;flex-direction:column;gap:16px;}
   .routine-panel{border-radius:28px;padding:18px;}
   .routine-heading{align-items:flex-start;flex-direction:column;gap:10px;margin-bottom:16px;}
@@ -1248,7 +1259,7 @@ async function analyse(){
     else if(data.success){
       tokenUsage.recommendation = data.ai_usage || null
       logSessionTokenUsage()
-      showResult(data.recommendation, data.product_images || {}, data.product_urls || {}, tokenUsage)
+      showResult(data.recommendation, data.product_images || {}, data.product_urls || {}, tokenUsage, data.uploaded_photo_image || photoB64)
     }
     else showError(data.error)
   } catch(e){
@@ -1277,7 +1288,7 @@ function buildAdditionalInfo(){
 
 // . SHOW RESULT .
 // Renders the final personalized report, routines, lifestyle cards, and summary.
-function showResult(rec, productImages={}, productUrls={}, usage={}){
+function showResult(rec, productImages={}, productUrls={}, usage={}, uploadedPhoto=''){
   showScreen('result')
   const body=document.getElementById('result-body')
   const morningRoutine = normaliseRoutineSteps(rec.morning_routine)
@@ -1297,7 +1308,7 @@ function showResult(rec, productImages={}, productUrls={}, usage={}){
       <div class="res-hero-text">${assessmentSummary}</div>
       <div class="res-concern-row">${badgeHtml}</div>
     </div>
-    ${recommendationBasisPanel(rec)}
+    ${recommendationAnalysisPanel(rec, uploadedPhoto)}
   `
 
   const routinePanels = []
@@ -1476,11 +1487,11 @@ function submitClarificationAnswers(){
   analyse()
 }
 
-// Shows whether the recommendation used text answers, the uploaded photo, or both.
-function recommendationBasisPanel(rec={}){
+// Shows the uploaded photo alongside the AI recommendation basis.
+function recommendationAnalysisPanel(rec={}, uploadedPhoto=''){
   const basis = rec.recommendation_basis
   const explanation = rec.basis_explanation
-  if(!basis && !explanation) return ''
+  if(!basis && !explanation && !uploadedPhoto) return ''
 
   const labels = {
     text_answers: 'Based on your answers',
@@ -1488,11 +1499,25 @@ function recommendationBasisPanel(rec={}){
     text_and_photo: 'Based on answers and photo',
     no_photo: 'Based on your answers'
   }
+  const title = labels[basis] || 'Recommendation analysis'
+  const fallbackText = uploadedPhoto
+    ? 'Your uploaded photo was included as visual context while matching the product plan and routine.'
+    : 'This recommendation was created from your questionnaire answers.'
 
   return `
-    <div style="margin:16px 28px 0;padding:14px 16px;border:1px solid var(--border);border-radius:8px;background:#fff;color:var(--text2);font-size:12.5px;line-height:1.6;">
-      <div style="font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--brand);margin-bottom:4px;">${labels[basis] || 'Analysis basis'}</div>
-      ${explanation ? `<div>${explanation}</div>` : ''}
+    <div class="analysis-panel">
+      ${uploadedPhoto ? `
+        <div class="analysis-photo">
+          <img src="${uploadedPhoto}" alt="Uploaded photo used for recommendation analysis">
+        </div>
+      ` : `
+        <div class="analysis-empty">No photo was uploaded for this recommendation.</div>
+      `}
+      <div class="analysis-copy">
+        <div class="analysis-kicker">Recommendation analysis</div>
+        <div class="analysis-title">${title}</div>
+        <div class="analysis-text">${explanation || fallbackText}</div>
+      </div>
     </div>
   `
 }
