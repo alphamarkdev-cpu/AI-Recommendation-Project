@@ -255,13 +255,17 @@ const parseJsonColumn = (value, fallback) => {
   }
 }
 
-const getActiveFlowQuestions = async (brandId, category) => {
-  const { data, error } = await supabase
+const getActiveFlowQuestions = async (brandId, category, storeId = null) => {
+  let query = supabase
     .from('brand_question_flows')
     .select('questions_json')
     .eq('brand_id', brandId)
     .eq('category', category)
     .eq('is_active', true)
+
+  if (storeId) query = query.eq('store_id', storeId)
+
+  const { data, error } = await query
     .order('version', { ascending: false })
     .limit(1)
     .maybeSingle()
@@ -642,12 +646,16 @@ const getActiveQuestionFlow = async (req, res) => {
       return res.status(400).json({ error: 'category is required' })
     }
 
-    const { data, error } = await supabase
+    let query = supabase
       .from('brand_question_flows')
-      .select('flow_id, brand_id, category, version, questions_json, flow_json, is_active, updated_at')
+      .select('flow_id, brand_id, store_id, category, version, questions_json, flow_json, is_active, updated_at')
       .eq('brand_id', req.brand.brand_id)
       .eq('category', category)
       .eq('is_active', true)
+
+    if (req.shopifyStore?.id) query = query.eq('store_id', req.shopifyStore.id)
+
+    const { data, error } = await query
       .order('version', { ascending: false })
       .limit(1)
       .maybeSingle()
@@ -672,12 +680,13 @@ const getActiveQuestionFlow = async (req, res) => {
 }
 
 // Generates and stores a new brand question flow from the brand's current product catalogue.
-const generateQuestionFlowForBrand = async (brand, requestedCategory) => {
+const generateQuestionFlowForBrand = async (brand, requestedCategory, options = {}) => {
     const category = requestedCategory || brand.product_category || 'general'
     const brandId = brand.brand_id
-    const generationSeed = Number.parseInt(hashText(`${brandId}:${category}:${Date.now()}`).slice(0, 8), 16)
+    const storeId = options.storeId || null
+    const generationSeed = Number.parseInt(hashText(`${storeId || brandId}:${category}:${Date.now()}`).slice(0, 8), 16)
 
-    const { data: products, error: productsError } = await supabase
+    let productsQuery = supabase
       .from('products')
       .select(`
         name,
@@ -692,6 +701,10 @@ const generateQuestionFlowForBrand = async (brand, requestedCategory) => {
       `)
       .eq('brand_id', brandId)
       .eq('is_active', true)
+
+    if (storeId) productsQuery = productsQuery.eq('store_id', storeId)
+
+    const { data: products, error: productsError } = await productsQuery
 
     if (productsError) throw productsError
     if (!products || products.length === 0) {
@@ -724,6 +737,25 @@ const catalogProfile = buildCatalogProfile(
   products,
   catalogueSignals
 )
+
+let previousFlowsQuery = supabase
+  .from('brand_question_flows')
+  .select('questions_json')
+  .eq('brand_id', brandId)
+  .eq('category', category)
+
+if (storeId) previousFlowsQuery = previousFlowsQuery.eq('store_id', storeId)
+
+const { data: previousFlows } = await previousFlowsQuery
+  .order('version', {
+    ascending: false
+  })
+  .limit(3)
+
+const previousQuestions =
+  (previousFlows || [])
+    .flatMap(flow => flow.questions_json || [])
+    .map(q => q.question_text)
 
 const questionStyles = [
   'direct',
@@ -1228,24 +1260,6 @@ The example above shows the object shape only. Your real response must include e
         console.error('Gemini flow routing failed:', flowError.message)
         throw flowError
       }
-      const advisorConfig =
-        advisorResponse.advisor_config || {
-          requires_photo: false,
-          photo_reason: null,
-          requires_routine: false,
-          recommendation_style: "products"
-}
-
-const recommendationSchema =
-    advisorResponse.recommendation_schema || {}
-
-flow = {
-  questions_json: questions,
-  flow_json: flowJson,
-  advisor_config: advisorConfig,
-  recommendation_schema:
-    recommendationSchema
-}
       const advisorPrompt = `
 You are designing the recommendation engine configuration.
 
@@ -1310,22 +1324,22 @@ Return ONLY JSON:
   }
 }
 `
-const advisorResult =
-await generateWithRetry(
-  model,
-  advisorPrompt
-)
+      const advisorResult = await generateWithRetry(model, advisorPrompt)
+      const advisorUsage = formatGeminiUsage(advisorResult.response.usageMetadata)
+      const advisorResponse = await parseJsonResponseWithRepair(model, advisorResult.response.text())
+      aiUsage = combineUsage(aiUsage, advisorUsage)
 
-const advisorUsage =
-formatGeminiUsage(
-  advisorResult.response.usageMetadata
-)
-
-const advisorResponse =
-await parseJsonResponseWithRepair(
-  model,
-  advisorResult.response.text()
-)
+      flow = {
+        questions_json: questions,
+        flow_json: flowJson,
+        advisor_config: advisorResponse.advisor_config || {
+          requires_photo: false,
+          photo_reason: null,
+          requires_routine: false,
+          recommendation_style: 'products'
+        },
+        recommendation_schema: advisorResponse.recommendation_schema || {}
+      }
     } catch (error) {
       console.error('Gemini flow generation failed. Using catalog fallback flow:', error.message)
       flow = buildFallbackFlow(category, products, generationSeed)
@@ -1341,11 +1355,15 @@ await parseJsonResponseWithRepair(
       fallbackReason = fallbackReason || 'AI did not return a valid question flow shape.'
     }
 
-    const { data: latestFlow, error: latestError } = await supabase
+    let latestFlowQuery = supabase
       .from('brand_question_flows')
       .select('version')
       .eq('brand_id', brandId)
       .eq('category', category)
+
+    if (storeId) latestFlowQuery = latestFlowQuery.eq('store_id', storeId)
+
+    const { data: latestFlow, error: latestError } = await latestFlowQuery
       .order('version', { ascending: false })
       .limit(1)
       .maybeSingle()
@@ -1353,32 +1371,16 @@ await parseJsonResponseWithRepair(
     if (latestError) throw latestError
 
     const nextVersion = (latestFlow?.version || 0) + 1
-    const { data: previousFlows } =
-await supabase
-.from('brand_question_flows')
-.select('questions_json')
-.eq('brand_id', brandId)
-.eq('category', category)
-.order('version', {
-  ascending: false
-})
-.limit(3)
-
-const previousQuestions =
-(previousFlows || [])
-.flatMap(
-  flow => flow.questions_json || []
-)
-.map(
-  q => q.question_text
-)
-
-    const { error: deactivateError } = await supabase
+    let deactivateQuery = supabase
       .from('brand_question_flows')
       .update({ is_active: false })
       .eq('brand_id', brandId)
       .eq('category', category)
       .eq('is_active', true)
+
+    if (storeId) deactivateQuery = deactivateQuery.eq('store_id', storeId)
+
+    const { error: deactivateError } = await deactivateQuery
 
     if (deactivateError) throw deactivateError
 
@@ -1386,6 +1388,7 @@ const previousQuestions =
       .from('brand_question_flows')
       .insert({
         brand_id: brandId,
+        store_id: storeId,
         category,
         version: nextVersion,
         questions_json: flow.questions_json,
@@ -1394,7 +1397,7 @@ const previousQuestions =
         recommendation_schema: flow.recommendation_schema,
         is_active: true
       })
-      .select('flow_id, brand_id, category, version, is_active, updated_at')
+      .select('flow_id, brand_id, store_id, category, version, is_active, updated_at')
       .single()
 
     if (saveError) throw saveError
@@ -1410,8 +1413,8 @@ const previousQuestions =
 
 const generateQuestionFlow = async (req, res) => {
   try {
-    const category = req.body.category || req.body.brand_category || req.brand.product_category || 'general'
-    const result = await generateQuestionFlowForBrand(req.brand, category)
+    const category = req.body.category || req.body.brand_category || req.shopifyStore?.product_category || req.brand.product_category || 'general'
+    const result = await generateQuestionFlowForBrand(req.brand, category, { storeId: req.shopifyStore?.id })
     res.json(result)
   } catch (error) {
     console.error('Generate question flow error:', error)
@@ -1470,11 +1473,11 @@ const selectDynamicQuestions = async (req, res) => {
     poolQuestions = data || []
 
     if (!poolQuestions || poolQuestions.length === 0) {
-      let flowQuestions = await getActiveFlowQuestions(req.brand.brand_id, brand_category)
+      let flowQuestions = await getActiveFlowQuestions(req.brand.brand_id, brand_category, req.shopifyStore?.id)
 
       if (!flowQuestions.length) {
-        await generateQuestionFlowForBrand(req.brand, brand_category)
-        flowQuestions = await getActiveFlowQuestions(req.brand.brand_id, brand_category)
+        await generateQuestionFlowForBrand(req.brand, brand_category, { storeId: req.shopifyStore?.id })
+        flowQuestions = await getActiveFlowQuestions(req.brand.brand_id, brand_category, req.shopifyStore?.id)
       }
 
       if (flowQuestions.length) {

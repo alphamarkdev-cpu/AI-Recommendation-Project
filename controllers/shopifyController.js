@@ -423,7 +423,7 @@ const getProductCategory = (product, brand) => {
   return normalizeBrandCategory(rawCategory)
 }
 
-const buildProductPayload = (shop, brand, product) => {
+const buildProductPayload = (shop, brand, product, storeId = null) => {
   const tags = Array.isArray(product.tags)
     ? product.tags.filter(isUsefulShopifyTag)
     : parseShopifyTags(product.tags).filter(isUsefulShopifyTag)
@@ -435,6 +435,7 @@ const buildProductPayload = (shop, brand, product) => {
 
   return {
     brand_id: brand.brand_id,
+    store_id: storeId,
     name: product.title || 'Untitled product',
     category,
     description: stripHtml(product.body_html || product.descriptionHtml),
@@ -452,12 +453,14 @@ const buildProductPayload = (shop, brand, product) => {
   }
 }
 
-const getExistingProductId = async (brandId, payload) => {
+const getExistingProductId = async (brandId, payload, storeId = null) => {
   let query = supabase
     .from('products')
     .select('product_id')
     .eq('brand_id', brandId)
     .limit(1)
+
+  if (storeId) query = query.eq('store_id', storeId)
 
   query = payload.product_url
     ? query.eq('product_url', payload.product_url)
@@ -507,12 +510,12 @@ const ensureProductMatchTags = async (productId, product, payload) => {
   if (error) throw error
 }
 
-const saveShopifyProducts = async (shop, brand, shopifyProducts) => {
+const saveShopifyProducts = async (shop, brand, shopifyProducts, storeId = null) => {
   let savedCount = 0
 
   for (const shopifyProduct of shopifyProducts) {
-    const payload = buildProductPayload(shop, brand, shopifyProduct)
-    const existingProductId = await getExistingProductId(brand.brand_id, payload)
+    const payload = buildProductPayload(shop, brand, shopifyProduct, storeId)
+    const existingProductId = await getExistingProductId(brand.brand_id, payload, storeId)
 
     const write = existingProductId
       ? supabase
@@ -565,11 +568,11 @@ const inferSyncedProductCategory = (brand, shopifyProducts) => {
   return sortedCategories.map(([category]) => category)[0] || null
 }
 
-const syncBrandCategoryFromProducts = async (brand, shopifyProducts) => {
-  const inferredCategory = inferSyncedProductCategory(brand, shopifyProducts)
-  if (!inferredCategory) return brand.product_category || 'general'
+const syncStoreCategoryFromProducts = async (store, shopifyProducts) => {
+  const inferredCategory = inferSyncedProductCategory(store.brands, shopifyProducts)
+  if (!inferredCategory) return store.product_category || store.brands.product_category || 'general'
 
-  const currentCategory = normalizeBrandCategory(brand.product_category)
+  const currentCategory = normalizeBrandCategory(store.product_category || store.brands.product_category)
   const shouldUpdateCategory =
     isDefaultCategory(currentCategory) ||
     (
@@ -578,16 +581,16 @@ const syncBrandCategoryFromProducts = async (brand, shopifyProducts) => {
       currentCategory !== inferredCategory
     )
 
-  if (!shouldUpdateCategory) return brand.product_category
+  if (!shouldUpdateCategory) return store.product_category || store.brands.product_category
 
   const { error } = await supabase
-    .from('brands')
+    .from('shopify_stores')
     .update({ product_category: inferredCategory })
-    .eq('brand_id', brand.brand_id)
+    .eq('id', store.id)
 
   if (error) throw error
 
-  brand.product_category = inferredCategory
+  store.product_category = inferredCategory
   return inferredCategory
 }
 
@@ -605,8 +608,8 @@ const renderShopifyAppHome = (res, dashboard) => {
     syncError
   } = dashboard
 
-  const category = brand?.product_category || 'general'
-  const color = brand?.primary_color || '#1B4332'
+  const category = dashboard.productCategory || brand?.product_category || 'general'
+  const color = dashboard.primaryColor || brand?.primary_color || '#1B4332'
   const brandName = brand?.name || shopSlug(shop).replace(/-/g, ' ')
   const settingsToken = signShopToken(shop, 'settings')
   const syncToken = signShopToken(shop, 'sync_products')
@@ -1391,7 +1394,10 @@ const getShopDashboard = async shop => {
   const { data: store, error: storeError } = await supabase
     .from('shopify_stores')
     .select(`
+      id,
       shop_domain,
+      product_category,
+      primary_color,
       installed_at,
       brands(brand_id, name, slug, api_key, product_category, primary_color)
     `)
@@ -1403,6 +1409,8 @@ const getShopDashboard = async shop => {
   if (!store?.brands) return null
 
   const brandId = store.brands.brand_id
+  const storeId = store.id
+  const productCategory = store.product_category || store.brands.product_category || 'general'
 
   const [
     { count: productCount, error: productCountError },
@@ -1412,15 +1420,19 @@ const getShopDashboard = async shop => {
     supabase
       .from('products')
       .select('product_id', { count: 'exact', head: true })
-      .eq('brand_id', brandId),
+      .eq('brand_id', brandId)
+      .eq('store_id', storeId),
     supabase
       .from('brand_question_flows')
       .select('flow_id', { count: 'exact', head: true })
-      .eq('brand_id', brandId),
+      .eq('brand_id', brandId)
+      .eq('store_id', storeId),
     supabase
       .from('brand_question_flows')
       .select('flow_id')
       .eq('brand_id', brandId)
+      .eq('store_id', storeId)
+      .eq('category', productCategory)
       .eq('is_active', true)
       .limit(1)
       .maybeSingle()
@@ -1433,6 +1445,9 @@ const getShopDashboard = async shop => {
   return {
     shop,
     brand: store.brands,
+    storeId,
+    productCategory,
+    primaryColor: store.primary_color || store.brands.primary_color || '#1B4332',
     productCount,
     flowCount,
     activeFlow: Boolean(activeFlow),
@@ -1448,7 +1463,7 @@ const createBrandForShop = async shop => {
 
   const { data: existingBrand, error: existingBrandError } = await supabase
     .from('brands')
-    .select('brand_id, api_key, product_category')
+    .select('brand_id, api_key, product_category, primary_color')
     .eq('slug', slug)
     .maybeSingle()
 
@@ -1465,13 +1480,13 @@ const createBrandForShop = async shop => {
       primary_color: '#1B4332',
       is_active: true
     })
-    .select('brand_id, api_key, product_category')
+    .select('brand_id, api_key, product_category, primary_color')
     .single()
 
   if (error?.code === '23505') {
     const { data: brandAfterConflict, error: conflictLookupError } = await supabase
       .from('brands')
-      .select('brand_id, api_key, product_category')
+      .select('brand_id, api_key, product_category, primary_color')
       .eq('slug', slug)
       .single()
 
@@ -1486,7 +1501,7 @@ const createBrandForShop = async shop => {
 const findOrCreateShopBrand = async shop => {
   const { data: existingStore, error: storeError } = await supabase
     .from('shopify_stores')
-    .select('brand_id, brands(brand_id, api_key, product_category)')
+    .select('brand_id, brands(brand_id, api_key, product_category, primary_color)')
     .eq('shop_domain', shop)
     .maybeSingle()
 
@@ -1553,7 +1568,9 @@ const syncShopifyProducts = async (req, res) => {
     const { data: store, error: storeError } = await supabase
       .from('shopify_stores')
       .select(`
+        id,
         shop_domain,
+        product_category,
         access_token,
         brands(brand_id, name, product_category)
       `)
@@ -1571,11 +1588,15 @@ const syncShopifyProducts = async (req, res) => {
     if (!liveToken) return res.status(401).send('Shop access token missing or invalid. Re-install the app.')
 
     const shopifyProducts = await fetchShopifyProducts(shop, liveToken)
-    const syncedCategory = await syncBrandCategoryFromProducts(store.brands, shopifyProducts)
-    const savedCount = await saveShopifyProducts(shop, store.brands, shopifyProducts)
+    const syncedCategory = await syncStoreCategoryFromProducts(store, shopifyProducts)
+    const storeBrand = {
+      ...store.brands,
+      product_category: syncedCategory || store.product_category || store.brands.product_category || 'general'
+    }
+    const savedCount = await saveShopifyProducts(shop, storeBrand, shopifyProducts, store.id)
 
     try {
-      await generateQuestionFlowForBrand(store.brands, syncedCategory || 'general')
+      await generateQuestionFlowForBrand(storeBrand, syncedCategory || 'general', { storeId: store.id })
       res.redirect(`${appUrl}/shopify?shop=${encodeURIComponent(shop)}&synced=${savedCount}`)
     } catch (questionError) {
       console.error('Shopify automatic question generation error:', questionError)
@@ -1614,17 +1635,17 @@ const updateShopifySettings = async (req, res) => {
     }
 
     const dashboard = await getShopDashboard(shop)
-    if (!dashboard?.brand?.brand_id) {
+    if (!dashboard?.storeId) {
       return res.status(404).send('Shop is not connected to AlphaMark.')
     }
 
     const { error } = await supabase
-      .from('brands')
+      .from('shopify_stores')
       .update({
         product_category: category,
         primary_color: primaryColor
       })
-      .eq('brand_id', dashboard.brand.brand_id)
+      .eq('id', dashboard.storeId)
 
     if (error) throw error
 
@@ -1688,6 +1709,8 @@ const handleShopifyCallback = async (req, res) => {
         refresh_token_expires_at: refreshTokenExpiresAt,
         scopes,
         brand_id: brand.brand_id,
+        product_category: brand.product_category || 'general',
+        primary_color: brand.primary_color || '#1B4332',
         installed_at: new Date().toISOString(),
         uninstalled_at: null
       }, { onConflict: 'shop_domain' })
@@ -1711,7 +1734,7 @@ const getShopBrandConfig = async (req, res) => {
 
     const { data, error } = await supabase
       .from('shopify_stores')
-      .select('shop_domain, brands(product_category, primary_color)')
+      .select('shop_domain, product_category, primary_color, brands(product_category, primary_color)')
       .eq('shop_domain', shop)
       .is('uninstalled_at', null)
       .maybeSingle()
@@ -1724,8 +1747,8 @@ const getShopBrandConfig = async (req, res) => {
     res.json({
       success: true,
       shop: data.shop_domain,
-      brand_category: data.brands.product_category || 'general',
-      primary_color: data.brands.primary_color || '#1B4332'
+      brand_category: data.product_category || data.brands.product_category || 'general',
+      primary_color: data.primary_color || data.brands.primary_color || '#1B4332'
     })
   } catch (error) {
     console.error('Shopify brand config error:', error)

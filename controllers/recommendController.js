@@ -142,8 +142,8 @@ const addProductContextToItems = (items, productByName) => {
   })
 }
 
-const getActiveBrandProducts = async brandId => {
-  const { data, error } = await supabase
+const getActiveBrandProducts = async (brandId, storeId = null) => {
+  let query = supabase
     .from('products')
     .select(`
       *,
@@ -153,17 +153,25 @@ const getActiveBrandProducts = async brandId => {
     .eq('brand_id', brandId)
     .eq('is_active', true)
 
+  if (storeId) query = query.eq('store_id', storeId)
+
+  const { data, error } = await query
+
   if (error) throw error
   return data || []
 }
 
-const getClarificationCandidates = async (brandId, category, answeredFields = []) => {
-  const { data, error } = await supabase
+const getClarificationCandidates = async (brandId, category, answeredFields = [], storeId = null) => {
+  let query = supabase
     .from('brand_question_flows')
     .select('questions_json')
     .eq('brand_id', brandId)
     .eq('category', category)
     .eq('is_active', true)
+
+  if (storeId) query = query.eq('store_id', storeId)
+
+  const { data, error } = await query
     .order('version', { ascending: false })
     .limit(1)
     .maybeSingle()
@@ -212,10 +220,10 @@ const getRecommendation = async (req, res) => {
     } = req.body
 
     const brandId   = req.brand.brand_id
+    const storeId = req.shopifyStore?.id || null
     const brandName = req.brand.name
-    const brandCategory = req.brand.product_category || req.brand.category || 'general'
-    const { data: flowConfig, error: flowError } =
-    await supabase
+    const brandCategory = req.shopifyStore?.product_category || req.brand.product_category || req.brand.category || 'general'
+    let flowQuery = supabase
       .from('brand_question_flows')
       .select(`
         advisor_config,
@@ -224,6 +232,10 @@ const getRecommendation = async (req, res) => {
       .eq('brand_id', brandId)
       .eq('category', brandCategory)
       .eq('is_active', true)
+
+    if (storeId) flowQuery = flowQuery.eq('store_id', storeId)
+
+    const { data: flowConfig, error: flowError } = await flowQuery
       .order('version', { ascending: false })
       .limit(1)
       .maybeSingle()
@@ -251,7 +263,7 @@ const getRecommendation = async (req, res) => {
       ...Object.keys(clarification_answers || {})
     ]
     const clarificationCandidates = photoImage && !hasClarificationAnswers
-      ? await getClarificationCandidates(brandId, brandCategory, answeredFields)
+      ? await getClarificationCandidates(brandId, brandCategory, answeredFields, storeId)
       : []
     const requiresRoutine =
       advisorConfig.requires_routine
@@ -267,8 +279,8 @@ const getRecommendation = async (req, res) => {
 
     // . Step 1: Fetch matching products .
     const matchingProducts = photoImage
-      ? await getActiveBrandProducts(brandId)
-      : await getMatchingProducts(brandId, profileTypes, concernsList)
+      ? await getActiveBrandProducts(brandId, storeId)
+      : await getMatchingProducts(brandId, profileTypes, concernsList, storeId)
 
     if (!matchingProducts || matchingProducts.length === 0) {
       return res.status(404).json({
@@ -666,6 +678,7 @@ Return ONLY valid JSON.
       .from('consumer_sessions')
       .insert({
         brand_id: brandId,
+        store_id: storeId,
         answers_json: {
           profile_type: profileTypes,
           concerns:  concernsList,

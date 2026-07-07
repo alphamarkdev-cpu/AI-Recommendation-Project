@@ -1,17 +1,27 @@
 const supabase = require('../config/supabase')
 
+const scopeProductsQuery = (query, brandId, storeId) => {
+  const scopedQuery = query.eq('brand_id', brandId)
+  return storeId ? scopedQuery.eq('store_id', storeId) : scopedQuery
+}
+
 // Returns all active products for the authenticated brand, including components and match tags.
 const getProducts = async (req, res) => {
   try {
-    const { data, error } = await supabase
+    const query = supabase
       .from('products')
       .select(`
         *,
         product_components(*),
         product_match_tags(*)
       `)
-      .eq('brand_id', req.brand.brand_id)
       .eq('is_active', true)
+
+    const { data, error } = await scopeProductsQuery(
+      query,
+      req.brand.brand_id,
+      req.shopifyStore?.id
+    )
 
     if (error) throw error
 
@@ -22,18 +32,19 @@ const getProducts = async (req, res) => {
 }
 
 // Finds and ranks active brand products that best match the user's selected profile attributes and concerns.
-const getMatchingProducts = async (brandId, profileTypes, concerns) => {
+const getMatchingProducts = async (brandId, profileTypes, concerns, storeId = null) => {
   try {
     // fetch ALL active products for this brand
-    const { data, error } = await supabase
+    const query = supabase
       .from('products')
       .select(`
         *,
         product_components(*),
         product_match_tags(*)
       `)
-      .eq('brand_id', brandId)
       .eq('is_active', true)
+
+    const { data, error } = await scopeProductsQuery(query, brandId, storeId)
 
     if (error) throw error
     if (!data || data.length === 0) return []
