@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>AlphaMark SaaS Dashboard — Prototype</title>
+    <link href="https://unpkg.com/tailwindcss@^2/dist/tailwind.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="/dashboard-static/style.css">
+  </head>
+  <body class="bg-gray-100 text-gray-800">
+    <div class="min-h-screen flex">
+      <aside class="w-64 bg-white border-r">
+        <div class="p-4 border-b">
+          <h1 class="text-xl font-semibold">AlphaMark</h1>
+          <p class="text-sm text-gray-500">SaaS Dashboard Prototype</p>
+        </div>
+        <nav class="p-4 space-y-2">
+          <select id="brandSelect" class="w-full p-2 border rounded" aria-label="Brand selector"></select>
+          <button data-page="overview" class="nav-btn w-full text-left p-2 rounded bg-indigo-50">Overview</button>
+          <button data-page="products" class="nav-btn w-full text-left p-2 rounded">Product Management</button>
+          <button data-page="questions" class="nav-btn w-full text-left p-2 rounded">Questions</button>
+          <button data-page="customers" class="nav-btn w-full text-left p-2 rounded">Customer Analytics</button>
+          <button data-page="recommendations" class="nav-btn w-full text-left p-2 rounded">Recommendation Analytics</button>
+          <button data-page="revenue" class="nav-btn w-full text-left p-2 rounded">Revenue Dashboard</button>
+          <button data-page="aiusage" class="nav-btn w-full text-left p-2 rounded">AI Usage</button>
+        </nav>
+      </aside>
+
+      <main class="flex-1 p-6">
+        <header class="flex items-center justify-between mb-6">
+          <div>
+            <h2 id="pageTitle" class="text-2xl font-bold">Overview</h2>
+            <p id="brandMeta" class="text-sm text-gray-500">Select a brand to view KPIs</p>
+          </div>
+          <div class="space-x-2">
+            <button id="syncBtn" class="px-4 py-2 bg-indigo-600 text-white rounded">Sync Products</button>
+            <button id="regenBtn" class="px-4 py-2 bg-white border rounded">Regenerate Metadata</button>
+          </div>
+        </header>
+
+        <section id="overviewPage">
+          <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+            <div class="card p-4">
+              <div class="text-sm text-gray-500">Brand Name</div>
+              <div id="k_brandName" class="text-lg font-semibold">—</div>
+            </div>
+            <div class="card p-4">
+              <div class="text-sm text-gray-500">Brand Category</div>
+              <div id="k_brandCategory" class="text-lg font-semibold">—</div>
+            </div>
+            <div class="card p-4">
+              <div class="text-sm text-gray-500">Total Active Stores</div>
+              <div id="k_activeStores" class="text-lg font-semibold">0</div>
+            </div>
+            <div class="card p-4">
+              <div class="text-sm text-gray-500">Total Products Synced</div>
+              <div id="k_productsSynced" class="text-lg font-semibold">0</div>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+            <div class="card p-4">
+              <div class="text-sm text-gray-500">Today's Recommendations</div>
+              <div id="k_todayRec" class="text-lg font-semibold">0</div>
+            </div>
+            <div class="card p-4">
+              <div class="text-sm text-gray-500">Monthly Recommendations</div>
+              <div id="k_monthRec" class="text-lg font-semibold">0</div>
+            </div>
+            <div class="card p-4">
+              <div class="text-sm text-gray-500">Recommendation Conversion Rate</div>
+              <div id="k_convRate" class="text-lg font-semibold">0%</div>
+            </div>
+            <div class="card p-4">
+              <div class="text-sm text-gray-500">Active Users Today</div>
+              <div id="k_activeUsers" class="text-lg font-semibold">0</div>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div class="card p-4">
+              <h3 class="font-semibold mb-2">Revenue Trend</h3>
+              <canvas id="revenueChart" height="160"></canvas>
+            </div>
+            <div class="card p-4">
+              <h3 class="font-semibold mb-2">Recommendation Trend</h3>
+              <canvas id="recChart" height="160"></canvas>
+            </div>
+          </div>
+        </section>
+
+        <section id="contentArea" class="mt-6"></section>
+      </main>
+    </div>
+
+    <script src="/dashboard-static/app.js"></script>
+  </body>
+</html>

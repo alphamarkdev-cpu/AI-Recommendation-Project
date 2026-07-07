@@ -14,12 +14,21 @@ const getRequestShop = req => (
   ''
 )
 
+const getCookie = (req, name) => {
+  const header = req.headers?.cookie || ''
+  if (!header) return null
+  const parts = header.split(';').map(p => p.trim())
+  const pair = parts.find(p => p.startsWith(name + '='))
+  if (!pair) return null
+  return decodeURIComponent(pair.split('=').slice(1).join('='))
+}
+
 const authenticateShopifyStore = async shop => {
   if (!isValidShopDomain(shop)) return null
 
   const { data: store, error } = await supabase
     .from('shopify_stores')
-    .select('id, shop_domain, brand_id, product_category, primary_color, brands(*)')
+    .select('id, shop_domain, brand_id, brands(*)')
     .eq('shop_domain', shop)
     .is('uninstalled_at', null)
     .maybeSingle()
@@ -48,7 +57,8 @@ const authenticateBrand = async (req, res, next) => {
       return next()
     }
 
-    const apiKey = req.headers['x-api-key']
+    // Allow API key via header or cookie (so browser redirect auth works)
+    const apiKey = req.headers['x-api-key'] || getCookie(req, 'alpha_api_key')
 
     if (!apiKey) {
       return res.status(401).json({ error: 'A connected Shopify shop or API key is required' })

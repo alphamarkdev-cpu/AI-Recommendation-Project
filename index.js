@@ -39,6 +39,8 @@ app.use('/api/recommend', recommendRouter)
 app.use('/api/questions', questionsRouter)
 app.use('/shopify', shopifyRouter)
 app.use('/api/shopify', shopifyRouter)
+const dashboardRouter = require('./routes/dashboard')
+app.use('/api/dashboard', dashboardRouter)
 // Serves public embed scripts such as the Shopify storefront widget loader.
 app.use('/public', express.static(path.join(__dirname, 'public')))
 app.use(express.static(path.join(__dirname)))
@@ -47,6 +49,9 @@ app.use(express.static(path.join(__dirname)))
 app.get('/widget', (req, res) => {
   res.sendFile(path.join(__dirname, 'alphamark-widget-v3.html'))
 })
+
+// Serve static dashboard assets (JS/CSS/sample data) so the prototype can be loaded.
+app.use('/dashboard-static', express.static(path.join(__dirname, 'dashboard')))
 
 // Simple health check route used to confirm that the API server is running.
 app.get('/', (req, res) => {

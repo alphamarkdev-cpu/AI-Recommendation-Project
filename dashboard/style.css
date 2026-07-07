@@ -1,0 +1,6 @@
+body { font-family: Inter, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial; }
+.card { background: white; border-radius: 8px; box-shadow: 0 1px 6px rgba(16,24,40,0.06); }
+.nav-btn { transition: background .12s ease; }
+.nav-btn:hover { background: #eef2ff; }
+.metric { font-size: 1.25rem; font-weight: 600; }
+.nav-btn { cursor: pointer; }

@@ -1,0 +1,30 @@
+{
+  "brands": [
+    {
+      "id": "brand_1",
+      "name": "LushLocks",
+      "category": "Hair Care",
+      "activeStores": 12,
+      "productsSynced": 423,
+      "todayRecommendations": 312,
+      "monthlyRecommendations": 8421,
+      "conversionRate": 4.8,
+      "activeUsersToday": 128,
+      "revenue": [1200, 1500, 1800, 1600, 2100, 2400, 2300],
+      "recommendationTrend": [200,300,350,320,410,480,460]
+    },
+    {
+      "id": "brand_2",
+      "name": "ProteinPro",
+      "category": "Supplements",
+      "activeStores": 5,
+      "productsSynced": 1120,
+      "todayRecommendations": 89,
+      "monthlyRecommendations": 2421,
+      "conversionRate": 3.6,
+      "activeUsersToday": 54,
+      "revenue": [800, 950, 1100, 900, 1200, 1300, 1250],
+      "recommendationTrend": [120,150,180,160,190,210,205]
+    }
+  ]
+}
