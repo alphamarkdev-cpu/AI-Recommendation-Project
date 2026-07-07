@@ -15,10 +15,10 @@
   function widgetUrl() {
     const url = new URL('/widget', apiUrl)
     url.searchParams.set('embed', '1')
-    url.searchParams.set('brand_key', brandKey)
     url.searchParams.set('brand_category', category)
     url.searchParams.set('api_url', apiUrl)
     if (shopDomain) url.searchParams.set('shop', shopDomain)
+    if (!shopDomain && brandKey) url.searchParams.set('brand_key', brandKey)
     return url.toString()
   }
 
@@ -83,7 +83,7 @@
     document.body.appendChild(button)
   }
 
-  // Resolves the installed Shopify shop to its AlphaMark brand config.
+  // Resolves the installed Shopify shop to its store-specific widget config.
   async function resolveShopBrandConfig() {
     if (!shopDomain) return
 
@@ -93,7 +93,6 @@
 
       if (!data.success) return
 
-      brandKey = data.brand_key || brandKey
       category = data.brand_category || category
       accentColor = data.primary_color || accentColor
     } catch (error) {
@@ -144,8 +143,8 @@
   async function init() {
     await resolveShopBrandConfig()
 
-    if (!brandKey) {
-      console.warn('AlphaMark widget missing data-brand-key.')
+    if (!brandKey && !shopDomain) {
+      console.warn('AlphaMark widget missing data-brand-key or data-shop-domain.')
     }
 
     injectStyles()

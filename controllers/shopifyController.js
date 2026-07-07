@@ -1264,8 +1264,8 @@ const renderShopifyAppHome = (res, dashboard) => {
             </div>
 
             <div class="info-block">
-              <span>Brand API key</span>
-              <code>${escapeHtml(maskKey(brand?.api_key))}</code>
+              <span>Store tenant</span>
+              <code>${escapeHtml(shop)}</code>
             </div>
           </div>
         </aside>
@@ -1711,7 +1711,7 @@ const getShopBrandConfig = async (req, res) => {
 
     const { data, error } = await supabase
       .from('shopify_stores')
-      .select('shop_domain, brands(api_key, product_category, primary_color)')
+      .select('shop_domain, brands(product_category, primary_color)')
       .eq('shop_domain', shop)
       .is('uninstalled_at', null)
       .maybeSingle()
@@ -1724,7 +1724,6 @@ const getShopBrandConfig = async (req, res) => {
     res.json({
       success: true,
       shop: data.shop_domain,
-      brand_key: data.brands.api_key,
       brand_category: data.brands.product_category || 'general',
       primary_color: data.brands.primary_color || '#1B4332'
     })

@@ -1,3 +1,6 @@
+-- Shopify store is the primary SaaS tenant.
+-- SHOPIFY_API_KEY and SHOPIFY_API_SECRET stay in .env as app credentials.
+-- Merchant/store credentials are created during OAuth and stored per shop_domain here.
 create table if not exists shopify_stores (
   id uuid primary key default gen_random_uuid(),
   shop_domain text unique not null,
@@ -15,6 +18,9 @@ create table if not exists shopify_stores (
 
 create index if not exists idx_shopify_stores_brand_id
   on shopify_stores(brand_id);
+
+create unique index if not exists idx_shopify_stores_shop_domain
+  on shopify_stores(shop_domain);
 
 alter table shopify_stores
   add column if not exists refresh_token text,

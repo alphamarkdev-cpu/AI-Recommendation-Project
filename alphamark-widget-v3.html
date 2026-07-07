@@ -576,6 +576,13 @@ let tokenUsage = {
 
 const SECTIONS = ['About You','Lifestyle','Needs','Assessment']
 
+function authHeaders(extra={}){
+  const headers = { ...extra }
+  if(SHOP) headers['x-shop-domain'] = SHOP
+  if(AKEY) headers['x-api-key'] = AKEY
+  return headers
+}
+
 function titleCaseCategory(value){
   return String(value || 'needs')
     .replace(/[-_]+/g, ' ')
@@ -620,14 +627,14 @@ async function loadQuestions(){
 
   try {
     await resolveWidgetBrandConfig()
-    if(!AKEY) {
+    if(!AKEY && !SHOP) {
       showFallback()
       return
     }
 
     // Fetch the pre-generated flow so the session does not need an AI question-selection call.
     const flowRes = await fetch(`${API}/api/questions/flow?category=${encodeURIComponent(BCAT)}`, {
-      headers: { 'x-api-key': AKEY }
+      headers: authHeaders()
     })
     const flowData = await flowRes.json()
 
@@ -659,15 +666,14 @@ async function loadQuestions(){
   }
 }
 
-// Resolves the brand API key when the widget is opened with a Shopify shop domain instead of a key.
+// Resolves store-specific widget display config when opened from a Shopify storefront.
 async function resolveWidgetBrandConfig(){
-  if(AKEY || !SHOP) return
+  if(!SHOP) return
 
   const response = await fetch(`${API}/api/shopify/brand-config?shop=${encodeURIComponent(SHOP)}`)
   const data = await response.json()
 
   if(data.success){
-    AKEY = data.brand_key || ''
     BCAT = data.brand_category || BCAT
     document.getElementById('st2').innerText = categoryLabel(BCAT)
   }
@@ -698,7 +704,7 @@ async function loadLegacyQuestions(){
 // Loads fixed About You and Lifestyle questions that should always come before brand assessment.
 async function fetchFixedQuestions(){
   const res = await fetch(`${API}/api/questions/fixed`, {
-    headers: { 'x-api-key': AKEY }
+    headers: authHeaders()
   })
   const data = await res.json()
 
@@ -1106,10 +1112,7 @@ async function fetchDynamicQ(){
   try {
     const res = await fetch(`${API}/api/questions/select`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': AKEY
-      },
+      headers: authHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify({
         personal_answers: personalAnswers,
         lifestyle_answers: lifestyleAnswers,
@@ -1229,7 +1232,7 @@ async function analyse(){
   try {
     const res=await fetch(`${API}/api/recommend`,{
       method:'POST',
-      headers:{'Content-Type':'application/json','x-api-key':AKEY},
+      headers:authHeaders({'Content-Type':'application/json'}),
       body:JSON.stringify(payload)
     })
     const raw = await res.text()

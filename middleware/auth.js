@@ -1,12 +1,55 @@
 const supabase = require('../config/supabase')
 
-// Validates the x-api-key header and attaches the matching active brand to the request.
+const isValidShopDomain = shop => (
+  typeof shop === 'string' &&
+  /^[a-zA-Z0-9][a-zA-Z0-9-]*\.myshopify\.com$/.test(shop)
+)
+
+const getRequestShop = req => (
+  req.headers['x-shop-domain'] ||
+  req.query.shop ||
+  req.query.shop_domain ||
+  req.body?.shop ||
+  req.body?.shop_domain ||
+  ''
+)
+
+const authenticateShopifyStore = async shop => {
+  if (!isValidShopDomain(shop)) return null
+
+  const { data: store, error } = await supabase
+    .from('shopify_stores')
+    .select('id, shop_domain, brand_id, brands(*)')
+    .eq('shop_domain', shop)
+    .is('uninstalled_at', null)
+    .maybeSingle()
+
+  if (error) throw error
+  if (!store?.brands?.is_active) return null
+
+  return store
+}
+
+// Resolves public widget requests by Shopify store first, then falls back to legacy brand API keys.
 const authenticateBrand = async (req, res, next) => {
   try {
+    const shop = getRequestShop(req)
+    const store = await authenticateShopifyStore(shop)
+
+    if (store) {
+      req.shopifyStore = {
+        id: store.id,
+        shop_domain: store.shop_domain,
+        brand_id: store.brand_id
+      }
+      req.brand = store.brands
+      return next()
+    }
+
     const apiKey = req.headers['x-api-key']
 
     if (!apiKey) {
-      return res.status(401).json({ error: 'API key is required' })
+      return res.status(401).json({ error: 'A connected Shopify shop or API key is required' })
     }
 
     const { data: brand, error } = await supabase
