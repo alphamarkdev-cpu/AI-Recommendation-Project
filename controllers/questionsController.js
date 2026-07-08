@@ -255,24 +255,21 @@ const parseJsonColumn = (value, fallback) => {
   }
 }
 
+const normalizeQuestionCategory = value => String(value || 'general')
+  .trim()
+  .toLowerCase()
+  .replace(/[_-]+/g, ' ')
+  .replace(/\s+/g, ' ')
+  .slice(0, 80)
+
+const categoryCandidates = category => Array.from(new Set([
+  category,
+  normalizeQuestionCategory(category)
+].filter(Boolean)))
+
 const getActiveFlowQuestions = async (brandId, category, storeId = null) => {
-  let query = supabase
-    .from('brand_question_flows')
-    .select('questions_json')
-    .eq('brand_id', brandId)
-    .eq('category', category)
-    .eq('is_active', true)
-
-  if (storeId) query = query.eq('store_id', storeId)
-
-  const { data, error } = await query
-    .order('version', { ascending: false })
-    .limit(1)
-    .maybeSingle()
-
-  if (error) throw error
-
-  const questionsJson = parseJsonColumn(data?.questions_json, [])
+  const flow = await getActiveFlowRow(brandId, category, storeId, 'questions_json')
+  const questionsJson = parseJsonColumn(flow?.questions_json, [])
   const questions = Array.isArray(questionsJson)
     ? questionsJson
     : questionsJson.questions || []
@@ -284,6 +281,51 @@ const getActiveFlowQuestions = async (brandId, category, storeId = null) => {
     category: question.category || category,
     section_label: question.section_label || 'Assessment'
   }))
+}
+
+const getActiveFlowRow = async (brandId, category, storeId = null, columns = '*', options = {}) => {
+  const fetchFlow = async (scopedStoreId, scopedCategory) => {
+    let query = supabase
+      .from('brand_question_flows')
+      .select(columns)
+      .eq('brand_id', brandId)
+      .eq('is_active', true)
+
+    if (scopedCategory) query = query.eq('category', scopedCategory)
+
+    query = scopedStoreId
+      ? query.eq('store_id', scopedStoreId)
+      : query.is('store_id', null)
+
+    const { data, error } = await query
+      .order('version', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+
+    if (error) throw error
+    return data
+  }
+
+  for (const candidateCategory of categoryCandidates(category)) {
+    if (storeId) {
+      const storeFlow = await fetchFlow(storeId, candidateCategory)
+      if (storeFlow) return storeFlow
+    }
+
+    const brandFlow = await fetchFlow(null, candidateCategory)
+    if (brandFlow) return brandFlow
+  }
+
+  if (options.fallbackAnyCategory) {
+    if (storeId) {
+      const storeFlow = await fetchFlow(storeId, null)
+      if (storeFlow) return storeFlow
+    }
+
+    return fetchFlow(null, null)
+  }
+
+  return null
 }
 
 const compactText = (value, maxLength = 160) => String(value || '')
@@ -646,21 +688,13 @@ const getActiveQuestionFlow = async (req, res) => {
       return res.status(400).json({ error: 'category is required' })
     }
 
-    let query = supabase
-      .from('brand_question_flows')
-      .select('flow_id, brand_id, store_id, category, version, questions_json, flow_json, is_active, updated_at')
-      .eq('brand_id', req.brand.brand_id)
-      .eq('category', category)
-      .eq('is_active', true)
-
-    if (req.shopifyStore?.id) query = query.eq('store_id', req.shopifyStore.id)
-
-    const { data, error } = await query
-      .order('version', { ascending: false })
-      .limit(1)
-      .maybeSingle()
-
-    if (error) throw error
+    const data = await getActiveFlowRow(
+      req.brand.brand_id,
+      category,
+      req.shopifyStore?.id,
+      'flow_id, brand_id, store_id, category, version, questions_json, flow_json, is_active, updated_at',
+      { fallbackAnyCategory: true }
+    )
 
     if (!data) {
       return res.status(404).json({

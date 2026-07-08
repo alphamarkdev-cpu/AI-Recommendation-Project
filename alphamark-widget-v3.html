@@ -771,6 +771,11 @@ function findQuestionIndexById(id){
   return allQ.findIndex(q => questionId(q) === id || q.field_key === id)
 }
 
+// Finds a stored brand-flow question without accidentally matching fixed onboarding questions.
+function findBrandQuestionIndexById(id){
+  return allQ.findIndex(q => isBrandCategory(q.category) && (questionId(q) === id || q.field_key === id))
+}
+
 // Normalizes option data from arrays, JSON strings, or objects with an options/items list.
 function optionList(value){
   const parsed = parseJsonMaybe(value, [])
@@ -926,7 +931,10 @@ function next(){
       return
     }
 
-    const nextIndex = findQuestionIndexById(nextId)
+    const brandNextIndex = findBrandQuestionIndexById(nextId)
+    const nextIndex = isBrandCategory(allQ[cur].category) || brandNextIndex !== -1
+      ? brandNextIndex
+      : findQuestionIndexById(nextId)
     if(nextIndex === -1){
       console.warn('Flow pointed to missing question:', nextId)
       moveToPhoto()
