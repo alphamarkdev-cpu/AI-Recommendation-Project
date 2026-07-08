@@ -28,7 +28,7 @@ const authenticateShopifyStore = async shop => {
 
   const { data: store, error } = await supabase
     .from('shopify_stores')
-    .select('id, shop_domain, brand_id, product_category, primary_color, brands(*)')
+    .select('id, shop_domain, brand_id, brands(*)')
     .eq('shop_domain', shop)
     .is('uninstalled_at', null)
     .maybeSingle()
@@ -50,8 +50,8 @@ const authenticateBrand = async (req, res, next) => {
         id: store.id,
         shop_domain: store.shop_domain,
         brand_id: store.brand_id,
-        product_category: store.product_category || store.brands.product_category || 'general',
-        primary_color: store.primary_color || store.brands.primary_color || '#1B4332'
+        product_category: store.brands.product_category || 'general',
+        primary_color: store.brands.primary_color || '#1B4332'
       }
       req.brand = store.brands
       return next()
@@ -83,4 +83,3 @@ const authenticateBrand = async (req, res, next) => {
 }
 
 module.exports = authenticateBrand
-
