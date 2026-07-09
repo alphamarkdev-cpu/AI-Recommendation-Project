@@ -29,6 +29,11 @@ const isMissingStoreColumnError = (error, column) => (
   error.message.includes('schema cache')
 )
 
+const isMissingStoreSettingsColumnError = error => (
+  isMissingStoreColumnError(error, 'primary_color') ||
+  isMissingStoreColumnError(error, 'product_category')
+)
+
 const authenticateShopifyStore = async shop => {
   if (!isValidShopDomain(shop)) return null
 
@@ -39,15 +44,15 @@ const authenticateShopifyStore = async shop => {
     .is('uninstalled_at', null)
     .maybeSingle()
 
-  if (isMissingStoreColumnError(error, 'primary_color')) {
+  if (isMissingStoreSettingsColumnError(error)) {
     const fallback = await supabase
       .from('shopify_stores')
-      .select('id, shop_domain, brand_id, product_category, brands(*)')
+      .select('id, shop_domain, brand_id, brands(*)')
       .eq('shop_domain', shop)
       .is('uninstalled_at', null)
       .maybeSingle()
 
-    store = fallback.data ? { ...fallback.data, primary_color: null } : fallback.data
+    store = fallback.data ? { ...fallback.data, product_category: null, primary_color: null } : fallback.data
     error = fallback.error
   }
 

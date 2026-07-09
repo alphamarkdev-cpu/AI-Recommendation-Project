@@ -128,22 +128,80 @@ const isMissingStoreColumnError = (error, column) => (
   error.message.includes('schema cache')
 )
 
+const isMissingStoreSettingsColumnError = error => (
+  isMissingStoreColumnError(error, 'primary_color') ||
+  isMissingStoreColumnError(error, 'product_category')
+)
+
 const upsertShopifyStore = async payload => {
   const { error } = await supabase
     .from('shopify_stores')
     .upsert(payload, { onConflict: 'shop_domain' })
 
-  if (!isMissingStoreColumnError(error, 'primary_color')) {
+  if (!isMissingStoreSettingsColumnError(error)) {
     if (error) throw error
     return
   }
 
-  const { primary_color, ...fallbackPayload } = payload
+  const { primary_color, product_category, ...fallbackPayload } = payload
   const { error: fallbackError } = await supabase
     .from('shopify_stores')
     .upsert(fallbackPayload, { onConflict: 'shop_domain' })
 
   if (fallbackError) throw fallbackError
+}
+
+const definedPayload = payload => Object.fromEntries(
+  Object.entries(payload).filter(([, value]) => value !== undefined && value !== null)
+)
+
+const updateShopifyStoreSettings = async (storeId, settings) => {
+  let payload = definedPayload(settings)
+  if (!storeId || !Object.keys(payload).length) return
+
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const { error } = await supabase
+      .from('shopify_stores')
+      .update(payload)
+      .eq('id', storeId)
+
+    if (!error) return
+
+    if (isMissingStoreColumnError(error, 'product_category')) {
+      const { product_category, ...fallbackPayload } = payload
+      payload = fallbackPayload
+      if (!Object.keys(payload).length) return
+      continue
+    }
+
+    if (isMissingStoreColumnError(error, 'primary_color')) {
+      const { primary_color, ...fallbackPayload } = payload
+      payload = fallbackPayload
+      if (!Object.keys(payload).length) return
+      continue
+    }
+
+    throw error
+  }
+}
+
+const syncBrandAndStoreSettings = async ({ brandId, storeId, productCategory, primaryColor }) => {
+  const settings = definedPayload({
+    product_category: productCategory,
+    primary_color: primaryColor
+  })
+  if (!Object.keys(settings).length) return
+
+  if (brandId) {
+    const { error } = await supabase
+      .from('brands')
+      .update(settings)
+      .eq('brand_id', brandId)
+
+    if (error) throw error
+  }
+
+  await updateShopifyStoreSettings(storeId, settings)
 }
 
 // --- Shopify token helpers (expiring offline tokens with refresh) ---
@@ -607,14 +665,14 @@ const syncStoreCategoryFromProducts = async (store, shopifyProducts) => {
 
   if (!shouldUpdateCategory) return store.product_category || store.brands.product_category
 
-  const { error } = await supabase
-    .from('shopify_stores')
-    .update({ product_category: inferredCategory })
-    .eq('id', store.id)
-
-  if (error) throw error
+  await syncBrandAndStoreSettings({
+    brandId: store.brands.brand_id,
+    storeId: store.id,
+    productCategory: inferredCategory
+  })
 
   store.product_category = inferredCategory
+  store.brands.product_category = inferredCategory
   return inferredCategory
 }
 
@@ -1429,13 +1487,12 @@ const getShopDashboard = async shop => {
     .is('uninstalled_at', null)
     .maybeSingle()
 
-  if (isMissingStoreColumnError(storeError, 'primary_color')) {
+  if (isMissingStoreSettingsColumnError(storeError)) {
     const fallback = await supabase
       .from('shopify_stores')
       .select(`
         id,
         shop_domain,
-        product_category,
         installed_at,
         brands(brand_id, name, slug, api_key, product_category, primary_color)
       `)
@@ -1443,7 +1500,7 @@ const getShopDashboard = async shop => {
       .is('uninstalled_at', null)
       .maybeSingle()
 
-    store = fallback.data ? { ...fallback.data, primary_color: null } : fallback.data
+    store = fallback.data ? { ...fallback.data, product_category: null, primary_color: null } : fallback.data
     storeError = fallback.error
   }
 
@@ -1607,18 +1664,36 @@ const syncShopifyProducts = async (req, res) => {
       return res.status(401).send('Invalid product sync token.')
     }
 
-    const { data: store, error: storeError } = await supabase
+    let { data: store, error: storeError } = await supabase
       .from('shopify_stores')
       .select(`
         id,
         shop_domain,
         product_category,
+        primary_color,
         access_token,
-        brands(brand_id, name, product_category)
+        brands(brand_id, name, product_category, primary_color)
       `)
       .eq('shop_domain', shop)
       .is('uninstalled_at', null)
       .maybeSingle()
+
+    if (isMissingStoreSettingsColumnError(storeError)) {
+      const fallback = await supabase
+        .from('shopify_stores')
+        .select(`
+          id,
+          shop_domain,
+          access_token,
+          brands(brand_id, name, product_category, primary_color)
+        `)
+        .eq('shop_domain', shop)
+        .is('uninstalled_at', null)
+        .maybeSingle()
+
+      store = fallback.data ? { ...fallback.data, product_category: null, primary_color: null } : fallback.data
+      storeError = fallback.error
+    }
 
     if (storeError) throw storeError
     if (!store?.brands?.brand_id) {
@@ -1631,9 +1706,17 @@ const syncShopifyProducts = async (req, res) => {
 
     const shopifyProducts = await fetchShopifyProducts(shop, liveToken)
     const syncedCategory = await syncStoreCategoryFromProducts(store, shopifyProducts)
+    const syncedPrimaryColor = store.primary_color || store.brands.primary_color || '#1B4332'
+    await syncBrandAndStoreSettings({
+      brandId: store.brands.brand_id,
+      storeId: store.id,
+      productCategory: syncedCategory || store.product_category || store.brands.product_category || 'general',
+      primaryColor: syncedPrimaryColor
+    })
     const storeBrand = {
       ...store.brands,
-      product_category: syncedCategory || store.product_category || store.brands.product_category || 'general'
+      product_category: syncedCategory || store.product_category || store.brands.product_category || 'general',
+      primary_color: syncedPrimaryColor
     }
     const savedCount = await saveShopifyProducts(shop, storeBrand, shopifyProducts, store.id)
 
@@ -1681,35 +1764,12 @@ const updateShopifySettings = async (req, res) => {
       return res.status(404).send('Shop is not connected to AlphaMark.')
     }
 
-    const settingsPayload = {
-      product_category: category,
-      primary_color: primaryColor
-    }
-
-    let { error } = await supabase
-      .from('shopify_stores')
-      .update(settingsPayload)
-      .eq('id', dashboard.storeId)
-
-    if (isMissingStoreColumnError(error, 'primary_color')) {
-      const fallbackUpdate = await supabase
-        .from('shopify_stores')
-        .update({ product_category: category })
-        .eq('id', dashboard.storeId)
-
-      error = fallbackUpdate.error
-
-      if (!error && dashboard.brand?.brand_id) {
-        const { error: brandColorError } = await supabase
-          .from('brands')
-          .update({ primary_color: primaryColor })
-          .eq('brand_id', dashboard.brand.brand_id)
-
-        if (brandColorError) throw brandColorError
-      }
-    }
-
-    if (error) throw error
+    await syncBrandAndStoreSettings({
+      brandId: dashboard.brand?.brand_id,
+      storeId: dashboard.storeId,
+      productCategory: category,
+      primaryColor
+    })
 
     res.redirect(`${appUrl}/shopify?shop=${encodeURIComponent(shop)}&saved=1`)
   } catch (error) {
@@ -1797,15 +1857,15 @@ const getShopBrandConfig = async (req, res) => {
       .is('uninstalled_at', null)
       .maybeSingle()
 
-    if (isMissingStoreColumnError(error, 'primary_color')) {
+    if (isMissingStoreSettingsColumnError(error)) {
       const fallback = await supabase
         .from('shopify_stores')
-        .select('shop_domain, product_category, brands(product_category, primary_color)')
+        .select('shop_domain, brands(product_category, primary_color)')
         .eq('shop_domain', shop)
         .is('uninstalled_at', null)
         .maybeSingle()
 
-      data = fallback.data ? { ...fallback.data, primary_color: null } : fallback.data
+      data = fallback.data ? { ...fallback.data, product_category: null, primary_color: null } : fallback.data
       error = fallback.error
     }
 

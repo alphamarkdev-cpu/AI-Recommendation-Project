@@ -24,6 +24,11 @@ const isMissingStoreColumnError = (error, column) => (
   error.message.includes('schema cache')
 )
 
+const isMissingStoreSettingsColumnError = error => (
+  isMissingStoreColumnError(error, 'primary_color') ||
+  isMissingStoreColumnError(error, 'product_category')
+)
+
 const dashboardPage = (req, res) => {
   // Serve the static dashboard prototype stored in the repository's dashboard/ folder.
   res.sendFile(path.join(__dirname, '..', 'dashboard', 'index.html'))
@@ -95,14 +100,18 @@ const getStores = async brandId => {
     .eq('brand_id', brandId)
     .order('installed_at', { ascending: false })
 
-  if (isMissingStoreColumnError(error, 'primary_color')) {
+  if (isMissingStoreSettingsColumnError(error)) {
     const fallback = await supabase
       .from('shopify_stores')
-      .select('id, shop_domain, installed_at, uninstalled_at, brand_id, product_category')
+      .select('id, shop_domain, installed_at, uninstalled_at, brand_id')
       .eq('brand_id', brandId)
       .order('installed_at', { ascending: false })
 
-    data = (fallback.data || []).map(store => ({ ...store, primary_color: null }))
+    data = (fallback.data || []).map(store => ({
+      ...store,
+      product_category: null,
+      primary_color: null
+    }))
     error = fallback.error
   }
 
