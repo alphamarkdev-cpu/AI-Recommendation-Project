@@ -29,6 +29,27 @@ const isMissingStoreSettingsColumnError = error => (
   isMissingStoreColumnError(error, 'product_category')
 )
 
+const getErrorMessage = error => {
+  if (error instanceof Error && error.message) return error.message
+  if (typeof error === 'string') return error
+  if (typeof error?.message === 'string') return error.message
+  return ''
+}
+
+const isMissingColumnError = (error, table, column) => {
+  const message = getErrorMessage(error)
+  return (
+    message.includes(`'${column}'`) &&
+    message.includes(`'${table}'`) &&
+    message.includes('schema cache')
+  ) || (
+    message.includes(`${table}.${column}`) &&
+    message.includes('does not exist')
+  ) || (
+    message.includes(`column ${table}.${column} does not exist`)
+  )
+}
+
 const dashboardPage = (req, res) => {
   // Serve the static dashboard prototype stored in the repository's dashboard/ folder.
   res.sendFile(path.join(__dirname, '..', 'dashboard', 'index.html'))
@@ -218,11 +239,30 @@ const getOverview = async (req, res) => {
 
 const getProducts = async (req, res) => {
   try {
-    const products = await safeSelect(
-      scopedQuery('products', req)
+    let { data: products, error: productsError } = await scopedQuery('products', req)
+      .select(`
+        product_id,
+        store_id,
+        name,
+        category,
+        description,
+        price,
+        image_url,
+        product_url,
+        vendor,
+        product_tags,
+        suitable_customer_attributes,
+        external_product_id,
+        is_active,
+        product_match_tags(match_tag, intensity_level, priority_score)
+      `)
+      .order('name')
+
+    if (isMissingColumnError(productsError, 'products', 'store_id')) {
+      const fallback = await supabase
+        .from('products')
         .select(`
           product_id,
-          store_id,
           name,
           category,
           description,
@@ -236,8 +276,15 @@ const getProducts = async (req, res) => {
           is_active,
           product_match_tags(match_tag, intensity_level, priority_score)
         `)
+        .eq('brand_id', req.brand.brand_id)
         .order('name')
-    )
+
+      products = (fallback.data || []).map(product => ({ ...product, store_id: null }))
+      productsError = fallback.error
+    }
+
+    if (productsError) throw productsError
+    products = products || []
 
     res.json({
       success: true,
@@ -258,11 +305,23 @@ const getProducts = async (req, res) => {
 const getQuestions = async (req, res) => {
   try {
     const { brand, selectedStore } = await getBrandContext(req)
-    const flows = await safeSelect(
-      scopedQuery('brand_question_flows', req)
-        .select('flow_id, store_id, category, version, questions_json, flow_json, is_active, updated_at')
+    let { data: flows, error: flowsError } = await scopedQuery('brand_question_flows', req)
+      .select('flow_id, store_id, category, version, questions_json, flow_json, is_active, updated_at')
+      .order('updated_at', { ascending: false })
+
+    if (isMissingColumnError(flowsError, 'brand_question_flows', 'store_id')) {
+      const fallback = await supabase
+        .from('brand_question_flows')
+        .select('flow_id, category, version, questions_json, flow_json, is_active, updated_at')
+        .eq('brand_id', brand.brand_id)
         .order('updated_at', { ascending: false })
-    )
+
+      flows = (fallback.data || []).map(flow => ({ ...flow, store_id: null }))
+      flowsError = fallback.error
+    }
+
+    if (flowsError) throw flowsError
+    flows = flows || []
 
     res.json({
       success: true,

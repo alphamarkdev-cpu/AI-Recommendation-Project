@@ -1,5 +1,26 @@
 const supabase = require('../config/supabase')
 
+const getErrorMessage = error => {
+  if (error instanceof Error && error.message) return error.message
+  if (typeof error === 'string') return error
+  if (typeof error?.message === 'string') return error.message
+  return ''
+}
+
+const isMissingProductsStoreIdError = error => {
+  const message = getErrorMessage(error)
+  return (
+    message.includes(`'store_id'`) &&
+    message.includes(`'products'`) &&
+    message.includes('schema cache')
+  ) || (
+    message.includes('products.store_id') &&
+    message.includes('does not exist')
+  ) || (
+    message.includes('column products.store_id does not exist')
+  )
+}
+
 const scopeProductsQuery = (query, brandId, storeId) => {
   const scopedQuery = query.eq('brand_id', brandId)
   return storeId ? scopedQuery.eq('store_id', storeId) : scopedQuery
@@ -17,11 +38,26 @@ const getProducts = async (req, res) => {
       `)
       .eq('is_active', true)
 
-    const { data, error } = await scopeProductsQuery(
+    let { data, error } = await scopeProductsQuery(
       query,
       req.brand.brand_id,
       req.shopifyStore?.id
     )
+
+    if (isMissingProductsStoreIdError(error)) {
+      const fallback = await supabase
+        .from('products')
+        .select(`
+          *,
+          product_components(*),
+          product_match_tags(*)
+        `)
+        .eq('is_active', true)
+        .eq('brand_id', req.brand.brand_id)
+
+      data = fallback.data
+      error = fallback.error
+    }
 
     if (error) throw error
 
@@ -44,7 +80,22 @@ const getMatchingProducts = async (brandId, profileTypes, concerns, storeId = nu
       `)
       .eq('is_active', true)
 
-    const { data, error } = await scopeProductsQuery(query, brandId, storeId)
+    let { data, error } = await scopeProductsQuery(query, brandId, storeId)
+
+    if (isMissingProductsStoreIdError(error)) {
+      const fallback = await supabase
+        .from('products')
+        .select(`
+          *,
+          product_components(*),
+          product_match_tags(*)
+        `)
+        .eq('is_active', true)
+        .eq('brand_id', brandId)
+
+      data = fallback.data
+      error = fallback.error
+    }
 
     if (error) throw error
     if (!data || data.length === 0) return []

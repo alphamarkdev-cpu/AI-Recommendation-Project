@@ -6,6 +6,39 @@ require('dotenv').config()
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY)
 
+const getErrorMessage = error => {
+  if (error instanceof Error && error.message) return error.message
+  if (typeof error === 'string') return error
+  if (typeof error?.message === 'string') return error.message
+  return ''
+}
+
+const isMissingColumnError = (error, table, column) => {
+  const message = getErrorMessage(error)
+  return (
+    message.includes(`'${column}'`) &&
+    message.includes(`'${table}'`) &&
+    message.includes('schema cache')
+  ) || (
+    message.includes(`${table}.${column}`) &&
+    message.includes('does not exist')
+  ) || (
+    message.includes(`column ${table}.${column} does not exist`)
+  )
+}
+
+const isMissingProductsStoreIdError = error => (
+  isMissingColumnError(error, 'products', 'store_id')
+)
+
+const isMissingQuestionFlowsStoreIdError = error => (
+  isMissingColumnError(error, 'brand_question_flows', 'store_id')
+)
+
+const isMissingSessionsStoreIdError = error => (
+  isMissingColumnError(error, 'consumer_sessions', 'store_id')
+)
+
 const asArray = value => Array.isArray(value) ? value : []
 
 const parseJsonColumn = (value, fallback) => {
@@ -156,7 +189,22 @@ const getActiveBrandProducts = async (brandId, storeId = null) => {
   if (storeId) query = query.eq('store_id', storeId)
   else query = query.is('store_id', null)
 
-  const { data, error } = await query
+  let { data, error } = await query
+
+  if (isMissingProductsStoreIdError(error)) {
+    const fallback = await supabase
+      .from('products')
+      .select(`
+        *,
+        product_components(*),
+        product_match_tags(*)
+      `)
+      .eq('brand_id', brandId)
+      .eq('is_active', true)
+
+    data = fallback.data
+    error = fallback.error
+  }
 
   if (error) throw error
   return data || []
@@ -173,10 +221,25 @@ const getClarificationCandidates = async (brandId, category, answeredFields = []
   if (storeId) query = query.eq('store_id', storeId)
   else query = query.is('store_id', null)
 
-  const { data, error } = await query
+  let { data, error } = await query
     .order('version', { ascending: false })
     .limit(1)
     .maybeSingle()
+
+  if (isMissingQuestionFlowsStoreIdError(error)) {
+    const fallback = await supabase
+      .from('brand_question_flows')
+      .select('questions_json')
+      .eq('brand_id', brandId)
+      .eq('category', category)
+      .eq('is_active', true)
+      .order('version', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+
+    data = fallback.data
+    error = fallback.error
+  }
 
   if (error) throw error
 
@@ -238,10 +301,28 @@ const getRecommendation = async (req, res) => {
     if (storeId) flowQuery = flowQuery.eq('store_id', storeId)
     else flowQuery = flowQuery.is('store_id', null)
 
-    const { data: flowConfig, error: flowError } = await flowQuery
+    let { data: flowConfig, error: flowError } = await flowQuery
       .order('version', { ascending: false })
       .limit(1)
       .maybeSingle()
+
+    if (isMissingQuestionFlowsStoreIdError(flowError)) {
+      const fallback = await supabase
+        .from('brand_question_flows')
+        .select(`
+          advisor_config,
+          recommendation_schema
+        `)
+        .eq('brand_id', brandId)
+        .eq('category', brandCategory)
+        .eq('is_active', true)
+        .order('version', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+
+      flowConfig = fallback.data
+      flowError = fallback.error
+    }
 
     if (flowError) throw flowError
 
@@ -677,33 +758,44 @@ Return ONLY valid JSON.
     console.log('Gemini token usage - recommendation:', aiUsage)
     
     // . Step 6: Save session .
-    const { error: sessionError } = await supabase
+    const sessionPayload = {
+      brand_id: brandId,
+      store_id: storeId,
+      answers_json: {
+        profile_type: profileTypes,
+        concerns:  concernsList,
+        age,
+        concern_duration: durationInput,
+        allergies,
+        budget,
+        additional_info,
+        clarification_answers: clarification_answers || null,
+        ...(all_answers || {})
+      },
+      photo_analysis_json: photoImage
+        ? {
+            result: photo_analysis,
+            mime_type: photoImage.mimeType,
+            verification: recommendation.photo_verification || null,
+            recommendation_basis: recommendation.recommendation_basis || null,
+            basis_explanation: recommendation.basis_explanation || null
+          }
+        : null,
+      recommended_product_ids: matchingProducts.map(p => p.product_id)
+    }
+
+    let { error: sessionError } = await supabase
       .from('consumer_sessions')
-      .insert({
-        brand_id: brandId,
-        store_id: storeId,
-        answers_json: {
-          profile_type: profileTypes,
-          concerns:  concernsList,
-          age,
-          concern_duration: durationInput,
-          allergies,
-          budget,
-          additional_info,
-          clarification_answers: clarification_answers || null,
-          ...(all_answers || {})
-        },
-        photo_analysis_json: photoImage
-          ? {
-              result: photo_analysis,
-              mime_type: photoImage.mimeType,
-              verification: recommendation.photo_verification || null,
-              recommendation_basis: recommendation.recommendation_basis || null,
-              basis_explanation: recommendation.basis_explanation || null
-            }
-          : null,
-        recommended_product_ids: matchingProducts.map(p => p.product_id)
-      })
+      .insert(sessionPayload)
+
+    if (isMissingSessionsStoreIdError(sessionError)) {
+      const { store_id, ...fallbackPayload } = sessionPayload
+      const fallback = await supabase
+        .from('consumer_sessions')
+        .insert(fallbackPayload)
+
+      sessionError = fallback.error
+    }
 
     if (sessionError) console.error('Session save error:', sessionError)
 

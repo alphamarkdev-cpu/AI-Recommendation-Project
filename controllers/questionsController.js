@@ -39,6 +39,11 @@ const isMissingQuestionFlowsStoreIdError = error => (
   isMissingColumnError(error, 'brand_question_flows', 'store_id')
 )
 
+const withoutStoreIdColumn = columns => String(columns || '*')
+  .replace(/\bstore_id\s*,\s*/g, '')
+  .replace(/,\s*store_id\b/g, '')
+  .replace(/\bstore_id\b/g, '')
+
 // Runs Gemini generation with retries because onboarding flow generation is a one-time admin action.
 const generateWithRetry = async (model, prompt, attempts = 3) => {
   let lastError
@@ -317,7 +322,7 @@ const getActiveFlowQuestions = async (brandId, category, storeId = null) => {
 }
 
 const getActiveFlowRow = async (brandId, category, storeId = null, columns = '*', options = {}) => {
-  const fetchFlow = async (scopedStoreId, scopedCategory) => {
+  const fetchFlow = async (scopedStoreId, scopedCategory, allowStoreFallback = true) => {
     let query = supabase
       .from('brand_question_flows')
       .select(columns)
@@ -334,6 +339,24 @@ const getActiveFlowRow = async (brandId, category, storeId = null, columns = '*'
       .order('version', { ascending: false })
       .limit(1)
       .maybeSingle()
+
+    if (allowStoreFallback && isMissingQuestionFlowsStoreIdError(error)) {
+      let fallbackQuery = supabase
+        .from('brand_question_flows')
+        .select(withoutStoreIdColumn(columns))
+        .eq('brand_id', brandId)
+        .eq('is_active', true)
+
+      if (scopedCategory) fallbackQuery = fallbackQuery.eq('category', scopedCategory)
+
+      const fallback = await fallbackQuery
+        .order('version', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+
+      if (fallback.error) throw fallback.error
+      return fallback.data ? { ...fallback.data, store_id: null } : fallback.data
+    }
 
     if (error) throw error
     return data
