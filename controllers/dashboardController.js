@@ -158,7 +158,7 @@ const getOverview = async (req, res) => {
       orders,
       influencedOrders
     ] = await Promise.all([
-      countRows(productsQuery),
+      safeCountRows(productsQuery),
       safeCountRows(sessionsQuery),
       safeCountRows(todaySessionsQuery),
       safeCountRows(monthSessionsQuery),

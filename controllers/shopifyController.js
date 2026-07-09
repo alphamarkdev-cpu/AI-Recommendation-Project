@@ -178,6 +178,15 @@ const isMissingBrandSettingsColumnError = error => (
   isMissingColumnError(error, 'brands', 'product_category')
 )
 
+const isMissingProductStoreIdError = error => (
+  isMissingColumnError(error, 'products', 'store_id')
+)
+
+const withoutStoreId = payload => {
+  const { store_id, ...fallbackPayload } = payload
+  return fallbackPayload
+}
+
 const logDashboardWarning = (label, error) => {
   console.warn(`Shopify dashboard warning: ${label}:`, getErrorMessage(error, 'Unknown error'))
 }
@@ -640,22 +649,50 @@ const buildProductPayload = (shop, brand, product, storeId = null) => {
 }
 
 const getExistingProductId = async (brandId, payload, storeId = null) => {
-  let query = supabase
-    .from('products')
-    .select('product_id')
-    .eq('brand_id', brandId)
-    .limit(1)
+  const buildQuery = scoped => {
+    let query = supabase
+      .from('products')
+      .select('product_id')
+      .eq('brand_id', brandId)
+      .limit(1)
 
-  if (storeId) query = query.eq('store_id', storeId)
+    if (scoped && storeId) query = query.eq('store_id', storeId)
 
-  query = payload.product_url
-    ? query.eq('product_url', payload.product_url)
-    : query.eq('name', payload.name)
+    return payload.product_url
+      ? query.eq('product_url', payload.product_url)
+      : query.eq('name', payload.name)
+  }
 
-  const { data, error } = await query.maybeSingle()
+  const scoped = await buildQuery(true).maybeSingle()
+  if (!isMissingProductStoreIdError(scoped.error)) {
+    if (scoped.error) throw scoped.error
+    return scoped.data?.product_id || null
+  }
+
+  const { data, error } = await buildQuery(false).maybeSingle()
   if (error) throw error
 
   return data?.product_id || null
+}
+
+const writeProductPayload = async (existingProductId, payload) => {
+  const buildWrite = nextPayload => existingProductId
+    ? supabase
+      .from('products')
+      .update(nextPayload)
+      .eq('product_id', existingProductId)
+      .select('product_id')
+      .single()
+    : supabase
+      .from('products')
+      .insert(nextPayload)
+      .select('product_id')
+      .single()
+
+  const write = await buildWrite(payload)
+  if (!isMissingProductStoreIdError(write.error)) return write
+
+  return buildWrite(withoutStoreId(payload))
 }
 
 const ensureProductMatchTags = async (productId, product, payload) => {
@@ -703,20 +740,7 @@ const saveShopifyProducts = async (shop, brand, shopifyProducts, storeId = null)
     const payload = buildProductPayload(shop, brand, shopifyProduct, storeId)
     const existingProductId = await getExistingProductId(brand.brand_id, payload, storeId)
 
-    const write = existingProductId
-      ? supabase
-        .from('products')
-        .update(payload)
-        .eq('product_id', existingProductId)
-        .select('product_id')
-        .single()
-      : supabase
-        .from('products')
-        .insert(payload)
-        .select('product_id')
-        .single()
-
-    const { data, error } = await write
+    const { data, error } = await writeProductPayload(existingProductId, payload)
     if (error) throw error
 
     await ensureProductMatchTags(data.product_id, shopifyProduct, payload)

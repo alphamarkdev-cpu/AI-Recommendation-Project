@@ -6,6 +6,39 @@ require('dotenv').config()
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY)
 
+const getErrorMessage = error => {
+  if (error instanceof Error && error.message) return error.message
+  if (typeof error === 'string') return error
+  if (typeof error?.message === 'string') return error.message
+  try {
+    return JSON.stringify(error)
+  } catch {
+    return ''
+  }
+}
+
+const isMissingColumnError = (error, table, column) => {
+  const message = getErrorMessage(error)
+  return (
+    message.includes(`'${column}'`) &&
+    message.includes(`'${table}'`) &&
+    message.includes('schema cache')
+  ) || (
+    message.includes(`${table}.${column}`) &&
+    message.includes('does not exist')
+  ) || (
+    message.includes(`column ${table}.${column} does not exist`)
+  )
+}
+
+const isMissingProductsStoreIdError = error => (
+  isMissingColumnError(error, 'products', 'store_id')
+)
+
+const isMissingQuestionFlowsStoreIdError = error => (
+  isMissingColumnError(error, 'brand_question_flows', 'store_id')
+)
+
 // Runs Gemini generation with retries because onboarding flow generation is a one-time admin action.
 const generateWithRetry = async (model, prompt, attempts = 3) => {
   let lastError
@@ -738,7 +771,28 @@ const generateQuestionFlowForBrand = async (brand, requestedCategory, options = 
 
     if (storeId) productsQuery = productsQuery.eq('store_id', storeId)
 
-    const { data: products, error: productsError } = await productsQuery
+    let { data: products, error: productsError } = await productsQuery
+
+    if (isMissingProductsStoreIdError(productsError)) {
+      const fallback = await supabase
+        .from('products')
+        .select(`
+          name,
+          category,
+          description,
+          price,
+          vendor,
+          product_tags,
+          suitable_customer_attributes,
+          product_components(name),
+          product_match_tags(match_tag, intensity_level, priority_score)
+        `)
+        .eq('brand_id', brandId)
+        .eq('is_active', true)
+
+      products = fallback.data
+      productsError = fallback.error
+    }
 
     if (productsError) throw productsError
     if (!products || products.length === 0) {
@@ -781,11 +835,26 @@ let previousFlowsQuery = supabase
 if (storeId) previousFlowsQuery = previousFlowsQuery.eq('store_id', storeId)
 else previousFlowsQuery = previousFlowsQuery.is('store_id', null)
 
-const { data: previousFlows } = await previousFlowsQuery
+let { data: previousFlows, error: previousFlowsError } = await previousFlowsQuery
   .order('version', {
     ascending: false
   })
   .limit(3)
+
+if (isMissingQuestionFlowsStoreIdError(previousFlowsError)) {
+  const fallback = await supabase
+    .from('brand_question_flows')
+    .select('questions_json')
+    .eq('brand_id', brandId)
+    .eq('category', category)
+    .order('version', { ascending: false })
+    .limit(3)
+
+  previousFlows = fallback.data
+  previousFlowsError = fallback.error
+}
+
+if (previousFlowsError) throw previousFlowsError
 
 const previousQuestions =
   (previousFlows || [])
@@ -1399,10 +1468,26 @@ Return ONLY JSON:
     if (storeId) latestFlowQuery = latestFlowQuery.eq('store_id', storeId)
     else latestFlowQuery = latestFlowQuery.is('store_id', null)
 
-    const { data: latestFlow, error: latestError } = await latestFlowQuery
+    let { data: latestFlow, error: latestError } = await latestFlowQuery
       .order('version', { ascending: false })
       .limit(1)
       .maybeSingle()
+
+    const questionFlowsHaveStoreId = !isMissingQuestionFlowsStoreIdError(latestError)
+
+    if (!questionFlowsHaveStoreId) {
+      const fallback = await supabase
+        .from('brand_question_flows')
+        .select('version')
+        .eq('brand_id', brandId)
+        .eq('category', category)
+        .order('version', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+
+      latestFlow = fallback.data
+      latestError = fallback.error
+    }
 
     if (latestError) throw latestError
 
@@ -1414,27 +1499,36 @@ Return ONLY JSON:
       .eq('category', category)
       .eq('is_active', true)
 
-    if (storeId) deactivateQuery = deactivateQuery.eq('store_id', storeId)
-    else deactivateQuery = deactivateQuery.is('store_id', null)
+    if (questionFlowsHaveStoreId) {
+      if (storeId) deactivateQuery = deactivateQuery.eq('store_id', storeId)
+      else deactivateQuery = deactivateQuery.is('store_id', null)
+    }
 
     const { error: deactivateError } = await deactivateQuery
 
     if (deactivateError) throw deactivateError
 
+    const flowPayload = {
+      brand_id: brandId,
+      category,
+      version: nextVersion,
+      questions_json: flow.questions_json,
+      flow_json: flow.flow_json,
+      advisor_config: flow.advisor_config,
+      recommendation_schema: flow.recommendation_schema,
+      is_active: true
+    }
+
+    if (questionFlowsHaveStoreId) flowPayload.store_id = storeId
+
+    const selectColumns = questionFlowsHaveStoreId
+      ? 'flow_id, brand_id, store_id, category, version, is_active, updated_at'
+      : 'flow_id, brand_id, category, version, is_active, updated_at'
+
     const { data: savedFlow, error: saveError } = await supabase
       .from('brand_question_flows')
-      .insert({
-        brand_id: brandId,
-        store_id: storeId,
-        category,
-        version: nextVersion,
-        questions_json: flow.questions_json,
-        flow_json: flow.flow_json,
-        advisor_config: flow.advisor_config,
-        recommendation_schema: flow.recommendation_schema,
-        is_active: true
-      })
-      .select('flow_id, brand_id, store_id, category, version, is_active, updated_at')
+      .insert(flowPayload)
+      .select(selectColumns)
       .single()
 
     if (saveError) throw saveError
