@@ -125,14 +125,30 @@ const verifyShopifyHmac = query => {
 const getErrorMessage = (error, fallback = 'Internal server error') => {
   if (error instanceof Error && error.message) return error.message
   if (typeof error === 'string' && error.trim()) return error
-  if (error?.message) return String(error.message)
+  if (typeof error?.message === 'string' && error.message.trim()) return error.message
   if (error?.error_description) return String(error.error_description)
   if (error?.error) return String(error.error)
   try {
     const serialized = JSON.stringify(error)
-    return serialized && serialized !== '{}' ? serialized : fallback
+    if (
+      serialized &&
+      serialized !== '{}' &&
+      serialized !== '{"message":""}'
+    ) {
+      return serialized
+    }
   } catch {
-    return fallback
+    // Fall through to the fallback below.
+  }
+  const keys = error && typeof error === 'object' ? Object.keys(error).filter(Boolean) : []
+  return keys.length ? `${fallback} (${keys.join(', ')})` : fallback
+}
+
+const withShopifyStep = async (step, task) => {
+  try {
+    return await task()
+  } catch (error) {
+    throw new Error(`${step}: ${getErrorMessage(error, 'Unknown error')}`)
   }
 }
 
@@ -1698,9 +1714,17 @@ const startShopifyInstall = async (req, res) => {
       return res.status(400).send('A valid shop query parameter is required.')
     }
 
-    const installedStore = await getInstalledStore(shop)
+    const installedStore = await withShopifyStep(
+      'Checking Shopify installation',
+      () => getInstalledStore(shop)
+    )
+
     if (installedStore) {
-      const dashboard = await getShopDashboard(shop)
+      const dashboard = await withShopifyStep(
+        'Loading Shopify dashboard',
+        () => getShopDashboard(shop)
+      )
+
       return renderShopifyAppHome(res, {
         ...(dashboard || { shop }),
         saved: req.query.saved === '1',
@@ -1710,12 +1734,15 @@ const startShopifyInstall = async (req, res) => {
       })
     }
 
-    const redirectUri = `${appUrl}/shopify/callback`
-    const installUrl = new URL(`https://${shop}/admin/oauth/authorize`)
-    installUrl.searchParams.set('client_id', apiKey)
-    installUrl.searchParams.set('scope', scopes)
-    installUrl.searchParams.set('redirect_uri', redirectUri)
-    installUrl.searchParams.set('state', signState(shop))
+    const installUrl = await withShopifyStep('Preparing Shopify OAuth redirect', async () => {
+      const redirectUri = `${appUrl}/shopify/callback`
+      const url = new URL(`https://${shop}/admin/oauth/authorize`)
+      url.searchParams.set('client_id', apiKey)
+      url.searchParams.set('scope', scopes)
+      url.searchParams.set('redirect_uri', redirectUri)
+      url.searchParams.set('state', signState(shop))
+      return url
+    })
 
     res.redirect(installUrl.toString())
   } catch (error) {
