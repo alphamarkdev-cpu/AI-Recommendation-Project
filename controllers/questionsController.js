@@ -779,6 +779,7 @@ let previousFlowsQuery = supabase
   .eq('category', category)
 
 if (storeId) previousFlowsQuery = previousFlowsQuery.eq('store_id', storeId)
+else previousFlowsQuery = previousFlowsQuery.is('store_id', null)
 
 const { data: previousFlows } = await previousFlowsQuery
   .order('version', {
@@ -1396,6 +1397,7 @@ Return ONLY JSON:
       .eq('category', category)
 
     if (storeId) latestFlowQuery = latestFlowQuery.eq('store_id', storeId)
+    else latestFlowQuery = latestFlowQuery.is('store_id', null)
 
     const { data: latestFlow, error: latestError } = await latestFlowQuery
       .order('version', { ascending: false })
@@ -1413,6 +1415,7 @@ Return ONLY JSON:
       .eq('is_active', true)
 
     if (storeId) deactivateQuery = deactivateQuery.eq('store_id', storeId)
+    else deactivateQuery = deactivateQuery.is('store_id', null)
 
     const { error: deactivateError } = await deactivateQuery
 

@@ -154,6 +154,7 @@ const getActiveBrandProducts = async (brandId, storeId = null) => {
     .eq('is_active', true)
 
   if (storeId) query = query.eq('store_id', storeId)
+  else query = query.is('store_id', null)
 
   const { data, error } = await query
 
@@ -170,6 +171,7 @@ const getClarificationCandidates = async (brandId, category, answeredFields = []
     .eq('is_active', true)
 
   if (storeId) query = query.eq('store_id', storeId)
+  else query = query.is('store_id', null)
 
   const { data, error } = await query
     .order('version', { ascending: false })
@@ -234,6 +236,7 @@ const getRecommendation = async (req, res) => {
       .eq('is_active', true)
 
     if (storeId) flowQuery = flowQuery.eq('store_id', storeId)
+    else flowQuery = flowQuery.is('store_id', null)
 
     const { data: flowConfig, error: flowError } = await flowQuery
       .order('version', { ascending: false })

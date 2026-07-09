@@ -122,6 +122,30 @@ const verifyShopifyHmac = query => {
   return crypto.timingSafeEqual(Buffer.from(digest), Buffer.from(hmac))
 }
 
+const isMissingStoreColumnError = (error, column) => (
+  error?.message?.includes(`'${column}'`) &&
+  error.message.includes("'shopify_stores'") &&
+  error.message.includes('schema cache')
+)
+
+const upsertShopifyStore = async payload => {
+  const { error } = await supabase
+    .from('shopify_stores')
+    .upsert(payload, { onConflict: 'shop_domain' })
+
+  if (!isMissingStoreColumnError(error, 'primary_color')) {
+    if (error) throw error
+    return
+  }
+
+  const { primary_color, ...fallbackPayload } = payload
+  const { error: fallbackError } = await supabase
+    .from('shopify_stores')
+    .upsert(fallbackPayload, { onConflict: 'shop_domain' })
+
+  if (fallbackError) throw fallbackError
+}
+
 // --- Shopify token helpers (expiring offline tokens with refresh) ---
 const getShopRecord = async (shop) => {
   const { data, error } = await supabase
@@ -1391,7 +1415,7 @@ const getInstalledStore = async shop => {
 }
 
 const getShopDashboard = async shop => {
-  const { data: store, error: storeError } = await supabase
+  let { data: store, error: storeError } = await supabase
     .from('shopify_stores')
     .select(`
       id,
@@ -1404,6 +1428,24 @@ const getShopDashboard = async shop => {
     .eq('shop_domain', shop)
     .is('uninstalled_at', null)
     .maybeSingle()
+
+  if (isMissingStoreColumnError(storeError, 'primary_color')) {
+    const fallback = await supabase
+      .from('shopify_stores')
+      .select(`
+        id,
+        shop_domain,
+        product_category,
+        installed_at,
+        brands(brand_id, name, slug, api_key, product_category, primary_color)
+      `)
+      .eq('shop_domain', shop)
+      .is('uninstalled_at', null)
+      .maybeSingle()
+
+    store = fallback.data ? { ...fallback.data, primary_color: null } : fallback.data
+    storeError = fallback.error
+  }
 
   if (storeError) throw storeError
   if (!store?.brands) return null
@@ -1639,13 +1681,33 @@ const updateShopifySettings = async (req, res) => {
       return res.status(404).send('Shop is not connected to AlphaMark.')
     }
 
-    const { error } = await supabase
+    const settingsPayload = {
+      product_category: category,
+      primary_color: primaryColor
+    }
+
+    let { error } = await supabase
       .from('shopify_stores')
-      .update({
-        product_category: category,
-        primary_color: primaryColor
-      })
+      .update(settingsPayload)
       .eq('id', dashboard.storeId)
+
+    if (isMissingStoreColumnError(error, 'primary_color')) {
+      const fallbackUpdate = await supabase
+        .from('shopify_stores')
+        .update({ product_category: category })
+        .eq('id', dashboard.storeId)
+
+      error = fallbackUpdate.error
+
+      if (!error && dashboard.brand?.brand_id) {
+        const { error: brandColorError } = await supabase
+          .from('brands')
+          .update({ primary_color: primaryColor })
+          .eq('brand_id', dashboard.brand.brand_id)
+
+        if (brandColorError) throw brandColorError
+      }
+    }
 
     if (error) throw error
 
@@ -1699,23 +1761,19 @@ const handleShopifyCallback = async (req, res) => {
 
     const brand = await findOrCreateShopBrand(shop)
 
-    const { error: upsertError } = await supabase
-      .from('shopify_stores')
-      .upsert({
-        shop_domain: shop,
-        access_token: accessToken,
-        refresh_token: refreshToken,
-        expires_at: expiresAt,
-        refresh_token_expires_at: refreshTokenExpiresAt,
-        scopes,
-        brand_id: brand.brand_id,
-        product_category: brand.product_category || 'general',
-        primary_color: brand.primary_color || '#1B4332',
-        installed_at: new Date().toISOString(),
-        uninstalled_at: null
-      }, { onConflict: 'shop_domain' })
-
-    if (upsertError) throw upsertError
+    await upsertShopifyStore({
+      shop_domain: shop,
+      access_token: accessToken,
+      refresh_token: refreshToken,
+      expires_at: expiresAt,
+      refresh_token_expires_at: refreshTokenExpiresAt,
+      scopes,
+      brand_id: brand.brand_id,
+      product_category: brand.product_category || 'general',
+      primary_color: brand.primary_color || '#1B4332',
+      installed_at: new Date().toISOString(),
+      uninstalled_at: null
+    })
 
     res.redirect(`${shopifyConfig().appUrl}/shopify?shop=${encodeURIComponent(shop)}`)
   } catch (error) {
@@ -1732,12 +1790,24 @@ const getShopBrandConfig = async (req, res) => {
       return res.status(400).json({ success: false, error: 'Valid shop is required.' })
     }
 
-    const { data, error } = await supabase
+    let { data, error } = await supabase
       .from('shopify_stores')
-      .select('shop_domain, brands(product_category, primary_color)')
+      .select('shop_domain, product_category, primary_color, brands(product_category, primary_color)')
       .eq('shop_domain', shop)
       .is('uninstalled_at', null)
       .maybeSingle()
+
+    if (isMissingStoreColumnError(error, 'primary_color')) {
+      const fallback = await supabase
+        .from('shopify_stores')
+        .select('shop_domain, product_category, brands(product_category, primary_color)')
+        .eq('shop_domain', shop)
+        .is('uninstalled_at', null)
+        .maybeSingle()
+
+      data = fallback.data ? { ...fallback.data, primary_color: null } : fallback.data
+      error = fallback.error
+    }
 
     if (error) throw error
     if (!data?.brands) {
@@ -1747,8 +1817,8 @@ const getShopBrandConfig = async (req, res) => {
     res.json({
       success: true,
       shop: data.shop_domain,
-      brand_category: data.brands.product_category || 'general',
-      primary_color: data.brands.primary_color || '#1B4332'
+      brand_category: data.product_category || data.brands.product_category || 'general',
+      primary_color: data.primary_color || data.brands.primary_color || '#1B4332'
     })
   } catch (error) {
     console.error('Shopify brand config error:', error)

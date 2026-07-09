@@ -23,15 +23,33 @@ const getCookie = (req, name) => {
   return decodeURIComponent(pair.split('=').slice(1).join('='))
 }
 
+const isMissingStoreColumnError = (error, column) => (
+  error?.message?.includes(`'${column}'`) &&
+  error.message.includes("'shopify_stores'") &&
+  error.message.includes('schema cache')
+)
+
 const authenticateShopifyStore = async shop => {
   if (!isValidShopDomain(shop)) return null
 
-  const { data: store, error } = await supabase
+  let { data: store, error } = await supabase
     .from('shopify_stores')
-    .select('id, shop_domain, brand_id, brands(*)')
+    .select('id, shop_domain, brand_id, product_category, primary_color, brands(*)')
     .eq('shop_domain', shop)
     .is('uninstalled_at', null)
     .maybeSingle()
+
+  if (isMissingStoreColumnError(error, 'primary_color')) {
+    const fallback = await supabase
+      .from('shopify_stores')
+      .select('id, shop_domain, brand_id, product_category, brands(*)')
+      .eq('shop_domain', shop)
+      .is('uninstalled_at', null)
+      .maybeSingle()
+
+    store = fallback.data ? { ...fallback.data, primary_color: null } : fallback.data
+    error = fallback.error
+  }
 
   if (error) throw error
   if (!store?.brands?.is_active) return null
@@ -50,8 +68,8 @@ const authenticateBrand = async (req, res, next) => {
         id: store.id,
         shop_domain: store.shop_domain,
         brand_id: store.brand_id,
-        product_category: store.brands.product_category || 'general',
-        primary_color: store.brands.primary_color || '#1B4332'
+        product_category: store.product_category || store.brands.product_category || 'general',
+        primary_color: store.primary_color || store.brands.primary_color || '#1B4332'
       }
       req.brand = store.brands
       return next()

@@ -18,6 +18,12 @@ function handleError(res, error) {
   return res.status(500).json(payload)
 }
 
+const isMissingStoreColumnError = (error, column) => (
+  error?.message?.includes(`'${column}'`) &&
+  error.message.includes("'shopify_stores'") &&
+  error.message.includes('schema cache')
+)
+
 const dashboardPage = (req, res) => {
   // Serve the static dashboard prototype stored in the repository's dashboard/ folder.
   res.sendFile(path.join(__dirname, '..', 'dashboard', 'index.html'))
@@ -83,11 +89,22 @@ const scopedQuery = (table, req) => {
 }
 
 const getStores = async brandId => {
-  const { data, error } = await supabase
+  let { data, error } = await supabase
     .from('shopify_stores')
-    .select('id, shop_domain, installed_at, uninstalled_at, brand_id')
+    .select('id, shop_domain, installed_at, uninstalled_at, brand_id, product_category, primary_color')
     .eq('brand_id', brandId)
     .order('installed_at', { ascending: false })
+
+  if (isMissingStoreColumnError(error, 'primary_color')) {
+    const fallback = await supabase
+      .from('shopify_stores')
+      .select('id, shop_domain, installed_at, uninstalled_at, brand_id, product_category')
+      .eq('brand_id', brandId)
+      .order('installed_at', { ascending: false })
+
+    data = (fallback.data || []).map(store => ({ ...store, primary_color: null }))
+    error = fallback.error
+  }
 
   if (error) throw error
   return data || []
