@@ -173,6 +173,70 @@ const isMissingStoreSettingsColumnError = error => (
   isMissingStoreColumnError(error, 'product_category')
 )
 
+const isMissingBrandSettingsColumnError = error => (
+  isMissingColumnError(error, 'brands', 'primary_color') ||
+  isMissingColumnError(error, 'brands', 'product_category')
+)
+
+const logDashboardWarning = (label, error) => {
+  console.warn(`Shopify dashboard warning: ${label}:`, getErrorMessage(error, 'Unknown error'))
+}
+
+const getStoreRecordForShop = async (shop, extraColumns = '') => {
+  const baseColumns = `
+    id,
+    shop_domain,
+    brand_id,
+    installed_at${extraColumns ? `,\n    ${extraColumns}` : ''}
+  `
+
+  let { data, error } = await supabase
+    .from('shopify_stores')
+    .select(baseColumns)
+    .eq('shop_domain', shop)
+    .is('uninstalled_at', null)
+    .maybeSingle()
+
+  if (isMissingStoreSettingsColumnError(error)) {
+    const fallback = await supabase
+      .from('shopify_stores')
+      .select('id, shop_domain, brand_id, installed_at')
+      .eq('shop_domain', shop)
+      .is('uninstalled_at', null)
+      .maybeSingle()
+
+    data = fallback.data ? { ...fallback.data, product_category: null, primary_color: null } : fallback.data
+    error = fallback.error
+  }
+
+  if (error) throw error
+  return data
+}
+
+const getBrandById = async (brandId, columns = 'brand_id, name, slug, api_key, product_category, primary_color') => {
+  if (!brandId) return null
+
+  let { data, error } = await supabase
+    .from('brands')
+    .select(columns)
+    .eq('brand_id', brandId)
+    .maybeSingle()
+
+  if (isMissingBrandSettingsColumnError(error)) {
+    const fallback = await supabase
+      .from('brands')
+      .select('brand_id, name, slug, api_key')
+      .eq('brand_id', brandId)
+      .maybeSingle()
+
+    data = fallback.data ? { ...fallback.data, product_category: null, primary_color: null } : fallback.data
+    error = fallback.error
+  }
+
+  if (error) throw error
+  return data
+}
+
 const upsertShopifyStore = async payload => {
   const { error } = await supabase
     .from('shopify_stores')
@@ -1520,7 +1584,10 @@ const countProductsForDashboard = async (brandId, storeId) => {
     .eq('store_id', storeId)
 
   if (!isMissingColumnError(scoped.error, 'products', 'store_id')) {
-    if (scoped.error) throw scoped.error
+    if (scoped.error) {
+      logDashboardWarning('scoped product count unavailable', scoped.error)
+      return 0
+    }
     return scoped.count || 0
   }
 
@@ -1529,7 +1596,10 @@ const countProductsForDashboard = async (brandId, storeId) => {
     .select('product_id', { count: 'exact', head: true })
     .eq('brand_id', brandId)
 
-  if (fallback.error) throw fallback.error
+  if (fallback.error) {
+    logDashboardWarning('product count unavailable', fallback.error)
+    return 0
+  }
   return fallback.count || 0
 }
 
@@ -1556,8 +1626,10 @@ const getQuestionFlowDashboardStats = async (brandId, storeId, productCategory) 
     isMissingColumnError(scopedActive.error, 'brand_question_flows', 'store_id')
 
   if (!missingStoreId) {
-    if (scopedCount.error) throw scopedCount.error
-    if (scopedActive.error) throw scopedActive.error
+    if (scopedCount.error || scopedActive.error) {
+      logDashboardWarning('question flow stats unavailable', scopedCount.error || scopedActive.error)
+      return { flowCount: 0, activeFlow: false }
+    }
     return {
       flowCount: scopedCount.count || 0,
       activeFlow: Boolean(scopedActive.data)
@@ -1579,8 +1651,10 @@ const getQuestionFlowDashboardStats = async (brandId, storeId, productCategory) 
       .maybeSingle()
   ])
 
-  if (fallbackCount.error) throw fallbackCount.error
-  if (fallbackActive.error) throw fallbackActive.error
+  if (fallbackCount.error || fallbackActive.error) {
+    logDashboardWarning('fallback question flow stats unavailable', fallbackCount.error || fallbackActive.error)
+    return { flowCount: 0, activeFlow: false }
+  }
 
   return {
     flowCount: fallbackCount.count || 0,
@@ -1589,43 +1663,15 @@ const getQuestionFlowDashboardStats = async (brandId, storeId, productCategory) 
 }
 
 const getShopDashboard = async shop => {
-  let { data: store, error: storeError } = await supabase
-    .from('shopify_stores')
-    .select(`
-      id,
-      shop_domain,
-      product_category,
-      primary_color,
-      installed_at,
-      brands(brand_id, name, slug, api_key, product_category, primary_color)
-    `)
-    .eq('shop_domain', shop)
-    .is('uninstalled_at', null)
-    .maybeSingle()
+  const store = await getStoreRecordForShop(shop, 'product_category, primary_color')
+  if (!store?.brand_id) return null
 
-  if (isMissingStoreSettingsColumnError(storeError)) {
-    const fallback = await supabase
-      .from('shopify_stores')
-      .select(`
-        id,
-        shop_domain,
-        installed_at,
-        brands(brand_id, name, slug, api_key, product_category, primary_color)
-      `)
-      .eq('shop_domain', shop)
-      .is('uninstalled_at', null)
-      .maybeSingle()
+  const brand = await getBrandById(store.brand_id)
+  if (!brand) return null
 
-    store = fallback.data ? { ...fallback.data, product_category: null, primary_color: null } : fallback.data
-    storeError = fallback.error
-  }
-
-  if (storeError) throw storeError
-  if (!store?.brands) return null
-
-  const brandId = store.brands.brand_id
+  const brandId = brand.brand_id
   const storeId = store.id
-  const productCategory = store.product_category || store.brands.product_category || 'general'
+  const productCategory = store.product_category || brand.product_category || 'general'
 
   const [productCount, questionStats] = await Promise.all([
     countProductsForDashboard(brandId, storeId),
@@ -1634,10 +1680,10 @@ const getShopDashboard = async shop => {
 
   return {
     shop,
-    brand: store.brands,
+    brand,
     storeId,
     productCategory,
-    primaryColor: store.primary_color || store.brands.primary_color || '#1B4332',
+    primaryColor: store.primary_color || brand.primary_color || '#1B4332',
     productCount,
     flowCount: questionStats.flowCount,
     activeFlow: questionStats.activeFlow,
@@ -1691,12 +1737,18 @@ const createBrandForShop = async shop => {
 const findOrCreateShopBrand = async shop => {
   const { data: existingStore, error: storeError } = await supabase
     .from('shopify_stores')
-    .select('brand_id, brands(brand_id, api_key, product_category, primary_color)')
+    .select('brand_id')
     .eq('shop_domain', shop)
     .maybeSingle()
 
   if (storeError) throw storeError
-  if (existingStore?.brands) return existingStore.brands
+  if (existingStore?.brand_id) {
+    const brand = await getBrandById(
+      existingStore.brand_id,
+      'brand_id, api_key, product_category, primary_color'
+    )
+    if (brand) return brand
+  }
 
   return createBrandForShop(shop)
 }
@@ -1766,41 +1818,17 @@ const syncShopifyProducts = async (req, res) => {
       return res.status(401).send('Invalid product sync token.')
     }
 
-    let { data: store, error: storeError } = await supabase
-      .from('shopify_stores')
-      .select(`
-        id,
-        shop_domain,
-        product_category,
-        primary_color,
-        access_token,
-        brands(brand_id, name, product_category, primary_color)
-      `)
-      .eq('shop_domain', shop)
-      .is('uninstalled_at', null)
-      .maybeSingle()
+    const store = await getStoreRecordForShop(shop, 'product_category, primary_color, access_token')
+    const brand = await getBrandById(
+      store?.brand_id,
+      'brand_id, name, product_category, primary_color'
+    )
 
-    if (isMissingStoreSettingsColumnError(storeError)) {
-      const fallback = await supabase
-        .from('shopify_stores')
-        .select(`
-          id,
-          shop_domain,
-          access_token,
-          brands(brand_id, name, product_category, primary_color)
-        `)
-        .eq('shop_domain', shop)
-        .is('uninstalled_at', null)
-        .maybeSingle()
-
-      store = fallback.data ? { ...fallback.data, product_category: null, primary_color: null } : fallback.data
-      storeError = fallback.error
-    }
-
-    if (storeError) throw storeError
-    if (!store?.brands?.brand_id) {
+    if (!store || !brand?.brand_id) {
       return res.status(404).send('Shop is not connected to AlphaMark.')
     }
+
+    store.brands = brand
 
     // Obtain a valid (refreshed if needed) access token
     const liveToken = await getValidAccessToken(shop)
@@ -1952,35 +1980,18 @@ const getShopBrandConfig = async (req, res) => {
       return res.status(400).json({ success: false, error: 'Valid shop is required.' })
     }
 
-    let { data, error } = await supabase
-      .from('shopify_stores')
-      .select('shop_domain, product_category, primary_color, brands(product_category, primary_color)')
-      .eq('shop_domain', shop)
-      .is('uninstalled_at', null)
-      .maybeSingle()
+    const data = await getStoreRecordForShop(shop, 'product_category, primary_color')
+    const brand = await getBrandById(data?.brand_id, 'brand_id, product_category, primary_color')
 
-    if (isMissingStoreSettingsColumnError(error)) {
-      const fallback = await supabase
-        .from('shopify_stores')
-        .select('shop_domain, brands(product_category, primary_color)')
-        .eq('shop_domain', shop)
-        .is('uninstalled_at', null)
-        .maybeSingle()
-
-      data = fallback.data ? { ...fallback.data, product_category: null, primary_color: null } : fallback.data
-      error = fallback.error
-    }
-
-    if (error) throw error
-    if (!data?.brands) {
+    if (!data || !brand) {
       return res.status(404).json({ success: false, error: 'Shop is not connected to AlphaMark.' })
     }
 
     res.json({
       success: true,
       shop: data.shop_domain,
-      brand_category: data.product_category || data.brands.product_category || 'general',
-      primary_color: data.primary_color || data.brands.primary_color || '#1B4332'
+      brand_category: data.product_category || brand.product_category || 'general',
+      primary_color: data.primary_color || brand.primary_color || '#1B4332'
     })
   } catch (error) {
     console.error('Shopify brand config error:', error)
