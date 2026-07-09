@@ -122,10 +122,34 @@ const verifyShopifyHmac = query => {
   return crypto.timingSafeEqual(Buffer.from(digest), Buffer.from(hmac))
 }
 
+const getErrorMessage = (error, fallback = 'Internal server error') => {
+  if (error instanceof Error && error.message) return error.message
+  if (typeof error === 'string' && error.trim()) return error
+  if (error?.message) return String(error.message)
+  if (error?.error_description) return String(error.error_description)
+  if (error?.error) return String(error.error)
+  try {
+    const serialized = JSON.stringify(error)
+    return serialized && serialized !== '{}' ? serialized : fallback
+  } catch {
+    return fallback
+  }
+}
+
+const isMissingColumnError = (error, table, column) => {
+  const message = getErrorMessage(error, '')
+  return (
+    message.includes(`'${column}'`) &&
+    message.includes(`'${table}'`) &&
+    message.includes('schema cache')
+  ) || (
+    message.includes(`${table}.${column}`) &&
+    message.includes('does not exist')
+  )
+}
+
 const isMissingStoreColumnError = (error, column) => (
-  error?.message?.includes(`'${column}'`) &&
-  error.message.includes("'shopify_stores'") &&
-  error.message.includes('schema cache')
+  isMissingColumnError(error, 'shopify_stores', column)
 )
 
 const isMissingStoreSettingsColumnError = error => (
@@ -295,7 +319,7 @@ const refreshAccessToken = async (shop, refreshToken) => {
 
     return persistShopifyToken(shop, resp.data || {})
   } catch (err) {
-    console.error('Error refreshing Shopify token for', shop, err.response?.data || err.message || err)
+    console.error('Error refreshing Shopify token for', shop, err.response?.data || getErrorMessage(err) || err)
     throw err
   }
 }
@@ -1472,6 +1496,82 @@ const getInstalledStore = async shop => {
   return data
 }
 
+const countProductsForDashboard = async (brandId, storeId) => {
+  const scoped = await supabase
+    .from('products')
+    .select('product_id', { count: 'exact', head: true })
+    .eq('brand_id', brandId)
+    .eq('store_id', storeId)
+
+  if (!isMissingColumnError(scoped.error, 'products', 'store_id')) {
+    if (scoped.error) throw scoped.error
+    return scoped.count || 0
+  }
+
+  const fallback = await supabase
+    .from('products')
+    .select('product_id', { count: 'exact', head: true })
+    .eq('brand_id', brandId)
+
+  if (fallback.error) throw fallback.error
+  return fallback.count || 0
+}
+
+const getQuestionFlowDashboardStats = async (brandId, storeId, productCategory) => {
+  const [scopedCount, scopedActive] = await Promise.all([
+    supabase
+      .from('brand_question_flows')
+      .select('flow_id', { count: 'exact', head: true })
+      .eq('brand_id', brandId)
+      .eq('store_id', storeId),
+    supabase
+      .from('brand_question_flows')
+      .select('flow_id')
+      .eq('brand_id', brandId)
+      .eq('store_id', storeId)
+      .eq('category', productCategory)
+      .eq('is_active', true)
+      .limit(1)
+      .maybeSingle()
+  ])
+
+  const missingStoreId =
+    isMissingColumnError(scopedCount.error, 'brand_question_flows', 'store_id') ||
+    isMissingColumnError(scopedActive.error, 'brand_question_flows', 'store_id')
+
+  if (!missingStoreId) {
+    if (scopedCount.error) throw scopedCount.error
+    if (scopedActive.error) throw scopedActive.error
+    return {
+      flowCount: scopedCount.count || 0,
+      activeFlow: Boolean(scopedActive.data)
+    }
+  }
+
+  const [fallbackCount, fallbackActive] = await Promise.all([
+    supabase
+      .from('brand_question_flows')
+      .select('flow_id', { count: 'exact', head: true })
+      .eq('brand_id', brandId),
+    supabase
+      .from('brand_question_flows')
+      .select('flow_id')
+      .eq('brand_id', brandId)
+      .eq('category', productCategory)
+      .eq('is_active', true)
+      .limit(1)
+      .maybeSingle()
+  ])
+
+  if (fallbackCount.error) throw fallbackCount.error
+  if (fallbackActive.error) throw fallbackActive.error
+
+  return {
+    flowCount: fallbackCount.count || 0,
+    activeFlow: Boolean(fallbackActive.data)
+  }
+}
+
 const getShopDashboard = async shop => {
   let { data: store, error: storeError } = await supabase
     .from('shopify_stores')
@@ -1511,35 +1611,10 @@ const getShopDashboard = async shop => {
   const storeId = store.id
   const productCategory = store.product_category || store.brands.product_category || 'general'
 
-  const [
-    { count: productCount, error: productCountError },
-    { count: flowCount, error: flowCountError },
-    { data: activeFlow, error: activeFlowError }
-  ] = await Promise.all([
-    supabase
-      .from('products')
-      .select('product_id', { count: 'exact', head: true })
-      .eq('brand_id', brandId)
-      .eq('store_id', storeId),
-    supabase
-      .from('brand_question_flows')
-      .select('flow_id', { count: 'exact', head: true })
-      .eq('brand_id', brandId)
-      .eq('store_id', storeId),
-    supabase
-      .from('brand_question_flows')
-      .select('flow_id')
-      .eq('brand_id', brandId)
-      .eq('store_id', storeId)
-      .eq('category', productCategory)
-      .eq('is_active', true)
-      .limit(1)
-      .maybeSingle()
+  const [productCount, questionStats] = await Promise.all([
+    countProductsForDashboard(brandId, storeId),
+    getQuestionFlowDashboardStats(brandId, storeId, productCategory)
   ])
-
-  if (productCountError) throw productCountError
-  if (flowCountError) throw flowCountError
-  if (activeFlowError) throw activeFlowError
 
   return {
     shop,
@@ -1548,8 +1623,8 @@ const getShopDashboard = async shop => {
     productCategory,
     primaryColor: store.primary_color || store.brands.primary_color || '#1B4332',
     productCount,
-    flowCount,
-    activeFlow: Boolean(activeFlow),
+    flowCount: questionStats.flowCount,
+    activeFlow: questionStats.activeFlow,
     installedAt: store.installed_at
       ? new Date(store.installed_at).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })
       : null
@@ -1645,7 +1720,7 @@ const startShopifyInstall = async (req, res) => {
     res.redirect(installUrl.toString())
   } catch (error) {
     console.error('Shopify install error:', error)
-    res.status(500).send(error.message)
+    res.status(500).send(getErrorMessage(error, 'Shopify app failed to load.'))
   }
 }
 
@@ -1730,7 +1805,7 @@ const syncShopifyProducts = async (req, res) => {
     }
   } catch (error) {
     console.error('Shopify product sync error:', error.response?.data || error)
-    const message = encodeURIComponent(error.response?.data?.errors || error.message || 'Product sync failed.')
+    const message = encodeURIComponent(error.response?.data?.errors || getErrorMessage(error, 'Product sync failed.'))
     res.redirect(`${appUrl}/shopify?shop=${encodeURIComponent(shop)}&sync_error=${message}`)
   }
 }
@@ -1774,7 +1849,7 @@ const updateShopifySettings = async (req, res) => {
     res.redirect(`${appUrl}/shopify?shop=${encodeURIComponent(shop)}&saved=1`)
   } catch (error) {
     console.error('Shopify settings update error:', error)
-    res.status(500).send(error.message)
+    res.status(500).send(getErrorMessage(error, 'Shopify settings update failed.'))
   }
 }
 
@@ -1838,7 +1913,7 @@ const handleShopifyCallback = async (req, res) => {
     res.redirect(`${shopifyConfig().appUrl}/shopify?shop=${encodeURIComponent(shop)}`)
   } catch (error) {
     console.error('Shopify callback error:', error.response?.data || error)
-    res.status(500).send(error.message)
+    res.status(500).send(getErrorMessage(error.response?.data || error, 'Shopify callback failed.'))
   }
 }
 
@@ -1882,7 +1957,7 @@ const getShopBrandConfig = async (req, res) => {
     })
   } catch (error) {
     console.error('Shopify brand config error:', error)
-    res.status(500).json({ success: false, error: error.message })
+    res.status(500).json({ success: false, error: getErrorMessage(error) })
   }
 }
 
@@ -1930,7 +2005,7 @@ const handleAppUninstalledWebhook = async (req, res) => {
     res.status(200).send('OK')
   } catch (error) {
     console.error('Shopify uninstall webhook error:', error)
-    res.status(500).send(error.message)
+    res.status(500).send(getErrorMessage(error, 'Shopify uninstall webhook failed.'))
   }
 }
 
@@ -1943,7 +2018,7 @@ const handleAppScopesUpdateWebhook = async (req, res) => {
     res.status(200).send('OK')
   } catch (error) {
     console.error('Shopify scopes update webhook error:', error)
-    res.status(500).send(error.message)
+    res.status(500).send(getErrorMessage(error, 'Shopify scopes update webhook failed.'))
   }
 }
 
