@@ -37,13 +37,63 @@
         transform: none !important;
         border: 0;
         border-radius: 999px;
-        background: ${accentColor};
+        background: linear-gradient(135deg, ${accentColor}, #0f6f63);
         color: #fff;
-        box-shadow: 0 12px 34px rgba(0,0,0,.22);
+        box-shadow: 0 18px 44px rgba(0,0,0,.24);
         cursor: pointer;
         font: 700 13px/1.2 Arial, sans-serif;
         letter-spacing: .02em;
-        padding: 14px 20px;
+        padding: 12px 18px 12px 13px;
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        overflow: hidden;
+        isolation: isolate;
+        transition: transform .2s ease, box-shadow .2s ease;
+      }
+      .alphamark-widget-button::before {
+        content: '';
+        position: absolute;
+        inset: -40%;
+        background: linear-gradient(110deg, transparent 0%, rgba(255,255,255,.35) 46%, transparent 60%);
+        transform: translateX(-80%);
+        animation: alphamark-shine 4s ease-in-out infinite;
+        z-index: -1;
+      }
+      .alphamark-widget-button:hover {
+        transform: translateY(-2px) !important;
+        box-shadow: 0 22px 54px rgba(0,0,0,.28);
+      }
+      .alphamark-widget-button-icon {
+        width: 30px;
+        height: 30px;
+        border-radius: 999px;
+        background: rgba(255,255,255,.18);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font: 800 10px/1 Arial, sans-serif;
+        box-shadow: inset 0 0 0 1px rgba(255,255,255,.18);
+        flex: 0 0 auto;
+      }
+      .alphamark-widget-button-copy {
+        display: inline-flex;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 2px;
+      }
+      .alphamark-widget-button-label {
+        white-space: nowrap;
+      }
+      .alphamark-widget-button-sub {
+        font: 700 9px/1 Arial, sans-serif;
+        letter-spacing: .12em;
+        text-transform: uppercase;
+        opacity: .72;
+      }
+      @keyframes alphamark-shine {
+        0%, 55% { transform: translateX(-80%); }
+        80%, 100% { transform: translateX(80%); }
       }
       .alphamark-widget-overlay {
         position: fixed;
@@ -78,7 +128,19 @@
     const button = document.createElement('button')
     button.type = 'button'
     button.className = 'alphamark-widget-button'
-    button.textContent = buttonText
+    const icon = document.createElement('span')
+    icon.className = 'alphamark-widget-button-icon'
+    icon.textContent = 'AI'
+    const copy = document.createElement('span')
+    copy.className = 'alphamark-widget-button-copy'
+    const label = document.createElement('span')
+    label.className = 'alphamark-widget-button-label'
+    label.textContent = buttonText
+    const sub = document.createElement('span')
+    sub.className = 'alphamark-widget-button-sub'
+    sub.textContent = 'Product match'
+    copy.append(label, sub)
+    button.append(icon, copy)
     button.addEventListener('click', openWidget)
     document.body.appendChild(button)
   }
