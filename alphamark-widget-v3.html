@@ -276,10 +276,22 @@ body{background:#FCFCFD;color:var(--text);overflow:hidden;}
 .sec-tab.done::after{content:'';}
 .sec-tab.active{background:var(--brand);border-color:var(--brand);color:#fff;box-shadow:0 14px 34px rgba(14,27,44,.18);}
 .sec-tab.active::before{background:#fff;color:var(--brand);}
+/* Top navbar (section pills, AI meter, "what AI learned" strip) is replaced by the
+   in-screen sidebar (.q-sidebar) and is fully hidden — kept in the DOM only so the
+   existing JS (which still updates these elements) never throws on a missing node. */
+.hdr{display:flex !important;align-items:center;justify-content:space-between;gap:16px;padding:18px clamp(20px,4vw,48px) !important;}
+.hdr-top{display:flex !important;align-items:center;justify-content:space-between;width:100%;}
+.sec-tabs,.ai-meter-row,.ai-learn-panel,.hdr-prog-top{display:none !important;}
 .prog-bar{height:4px;background:#E2E8F0;}
 .prog-fill{background:linear-gradient(90deg,var(--brand2),var(--accent));}
 .screen{min-height:0;}
 #scr-q{height:100%;position:relative;}
+/* Explicit grid placement so hidden top-strip elements (display:none) never steal a
+   row from the header or the active screen — fixes the layout gap the old
+   navbar/"what AI learned" strip used to cause when toggled visible. */
+.hdr{grid-row:1;grid-column:1;}
+.hdr-prog-top,.ai-learn-panel{grid-row:2;grid-column:1;}
+.screen{grid-row:3;grid-column:1;}
 .q-wrap{min-height:0;}
 .q-slide{display:grid;grid-template-columns:minmax(280px,.72fr) minmax(360px,1fr);gap:clamp(28px,5vw,88px);align-items:center;padding:clamp(28px,6vw,90px) clamp(22px,7vw,112px) clamp(88px,10vh,120px);overflow-y:auto;}
 .q-slide::before{content:'';position:absolute;left:clamp(22px,7vw,112px);top:50%;width:1px;height:min(420px,56vh);background:linear-gradient(180deg,transparent,var(--border),transparent);transform:translateY(-50%);}
@@ -348,6 +360,44 @@ body{background:#FCFCFD;color:var(--text);overflow:hidden;}
 .recommend-loader{width:min(940px,100%);display:grid;grid-template-columns:minmax(280px,1fr) minmax(300px,.95fr);gap:32px;align-items:center;}
 .recommend-visual{position:relative;min-height:360px;border:1px solid rgba(14,27,44,.12);border-radius:34px;background:linear-gradient(145deg,#fff,#EEF2F7);box-shadow:0 26px 80px rgba(15,23,42,.1);overflow:hidden;}
 .recommend-visual::before{content:'';position:absolute;inset:24px;border:1px solid rgba(16,185,129,.16);border-radius:28px;}
+/* . AI ANALYSING STAGE — richer radial version . */
+.ai-analyze-panel{width:min(1080px,100%);margin:0 auto;}
+.ai-analyze-grid{display:grid;grid-template-columns:minmax(260px,.82fr) minmax(380px,1.3fr);gap:48px;align-items:center;}
+.ai-analyze-copy .loader-kicker{color:var(--indigo);text-align:left;}
+.ai-analyze-copy .loader-title{text-align:left;margin-left:0;margin-right:0;}
+.ai-analyze-copy .loader-copy{text-align:left;margin-left:0;margin-right:0;max-width:420px;}
+.ai-radial-stage{position:relative;min-height:440px;}
+.ai-radial-ring{position:absolute;inset:64px;border:1.5px dashed rgba(99,102,241,.28);border-radius:50%;}
+.ai-radial-core{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:126px;height:126px;border-radius:50%;background:radial-gradient(circle at 32% 28%,#A78BFA,#34D399 82%);display:flex;align-items:center;justify-content:center;font-size:46px;box-shadow:0 26px 64px rgba(99,102,241,.38);animation:orbPulse 2.6s ease-in-out infinite;z-index:2;}
+.ai-radial-dot{position:absolute;width:9px;height:9px;border-radius:50%;z-index:1;box-shadow:0 0 0 4px #fff;}
+.ai-radial-dot.dot-a{top:19%;left:23%;background:var(--indigo);}
+.ai-radial-dot.dot-b{top:19%;right:23%;background:var(--brand2);}
+.ai-radial-dot.dot-c{bottom:19%;left:21%;background:#F59E0B;}
+.ai-radial-dot.dot-d{bottom:19%;right:21%;background:#DB2777;}
+.ai-radial-card{position:absolute;width:208px;border-radius:18px;padding:14px 16px;box-shadow:0 16px 38px rgba(15,23,42,.09);display:flex;flex-direction:column;gap:8px;z-index:3;border:1px solid rgba(14,27,44,.05);}
+.ai-radial-card.pos-top{top:0;left:50%;transform:translateX(-50%);background:#ECFDF5;}
+.ai-radial-card.pos-left{top:44%;left:-6px;transform:translateY(-50%);background:#EEF0FE;}
+.ai-radial-card.pos-right{top:44%;right:-6px;transform:translateY(-50%);background:#EFF6FF;}
+.ai-radial-card.pos-bl{bottom:0;left:2%;background:#FFFBEB;}
+.ai-radial-card.pos-br{bottom:0;right:2%;background:#FDF2F8;}
+.ai-radial-icon{width:34px;height:34px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:16px;background:#fff;}
+.ai-radial-body b{display:block;font-size:13.5px;color:var(--text);font-weight:750;line-height:1.3;}
+.ai-radial-body span{display:block;font-size:11.5px;color:var(--text2);line-height:1.4;margin-top:2px;}
+.ai-radial-pct{align-self:flex-end;font-family:'Space Grotesk',sans-serif;font-size:13.5px;font-weight:800;}
+.ai-analyze-footer{max-width:760px;margin:36px auto 0;text-align:center;}
+.ai-analyze-status{font-family:'Space Grotesk',sans-serif;font-size:18px;color:var(--text);margin-bottom:16px;font-weight:650;}
+.ai-analyze-bar-row{display:flex;align-items:center;gap:14px;}
+.ai-analyze-bar-row .prog-bar{border-radius:99px;overflow:hidden;height:6px;}
+.ai-analyze-bar-row .prog-fill{background:linear-gradient(90deg,var(--indigo),var(--brand2));border-radius:99px;}
+.ai-analyze-bar-row b{font-family:'Space Grotesk',sans-serif;color:var(--indigo);font-size:15px;flex-shrink:0;}
+.ai-analyze-footer .loader-time-note{margin-top:16px;justify-content:center;}
+@media(max-width:900px){
+  .ai-analyze-grid{grid-template-columns:1fr;gap:24px;}
+  .ai-analyze-copy .loader-kicker,.ai-analyze-copy .loader-title,.ai-analyze-copy .loader-copy{text-align:center;margin-left:auto;margin-right:auto;}
+  .ai-radial-stage{min-height:0;}
+  .ai-radial-card{position:static;width:100%;transform:none !important;margin-bottom:10px;}
+  .ai-radial-ring,.ai-radial-dot,.ai-radial-core{display:none;}
+}
 .recommend-scan{position:absolute;left:24px;right:24px;top:52px;height:3px;background:linear-gradient(90deg,transparent,var(--brand2),var(--accent),transparent);box-shadow:0 0 24px rgba(16,185,129,.38);animation:scanLine 3s ease-in-out infinite;}
 .match-stack{position:absolute;inset:58px 42px 42px;display:grid;gap:13px;align-content:center;}
 .match-card{height:66px;border:1px solid rgba(14,27,44,.12);border-radius:18px;background:rgba(255,255,255,.9);box-shadow:0 14px 38px rgba(15,23,42,.06);display:grid;grid-template-columns:46px 1fr;gap:12px;align-items:center;padding:10px 14px;animation:cardGlow 2.4s ease-in-out infinite;}
@@ -747,7 +797,7 @@ body,.chip,.card-opt,.scale-btn,.txt-inp,.btn-prev,.btn-next,.analyze-btn,
       <span class="ai-meter-pct" id="aiPct">0%</span>
     </div>
   </div>
-  <div class="prog-bar" style="background:var(--border)"><div class="prog-fill" id="prog" style="width:0%"></div></div>
+  <div class="prog-bar hdr-prog-top" style="background:var(--border)"><div class="prog-fill" id="prog" style="width:0%"></div></div>
   <div class="ai-learn-panel" id="aiLearnPanel">
     <div class="ai-learn-title"><span class="dot"></span>What AlphaMark has learned so far</div>
     <div class="ai-learn-chips" id="aiLearnChips"></div>
@@ -1019,40 +1069,60 @@ function questionLoadingMarkup(title='Loading your questionnaire', copy='Prepari
 
 function recommendationLoadingMarkup(){
   return `
-    <div class="recommend-loader">
-      <div class="recommend-copy">
-        <div class="loader-kicker">Analysing your answers</div>
-        <div class="loader-title">Building your perfect product matches ✦</div>
-        <div class="loader-copy">Our AI is comparing your preferences with this store's product catalogue to find the best matches for you.</div>
-        <div class="recommend-progress-row">
-          <div class="prog-bar" style="background:var(--border);margin:0;"><div class="prog-fill" id="loadProg" style="width:0%"></div></div>
-          <div class="recommend-progress-label"><span id="recommend-status">Analysing profile signals</span><b id="loadPct">0%</b></div>
+    <div class="ai-analyze-panel">
+      <div class="ai-analyze-grid">
+        <div class="ai-analyze-copy">
+          <div class="loader-kicker">✦ Analysing your answers</div>
+          <div class="loader-title">Building your perfect product matches</div>
+          <div class="loader-copy">Our AI is analyzing your preferences, comparing with thousands of products, and finding the best matches just for you.</div>
         </div>
-        <div class="loader-time-note">🕐 Usually takes 20–40 seconds</div>
+        <div class="ai-radial-stage" aria-hidden="true">
+          <div class="ai-radial-ring"></div>
+          <div class="ai-radial-dot dot-a"></div>
+          <div class="ai-radial-dot dot-b"></div>
+          <div class="ai-radial-dot dot-c"></div>
+          <div class="ai-radial-dot dot-d"></div>
+          <div class="ai-radial-core">🧠</div>
+
+          <div class="ai-radial-card pos-top">
+            <div class="ai-radial-icon" style="color:#059669;">♥</div>
+            <div class="ai-radial-body"><b>Preferences</b><span>Understanding your priorities</span></div>
+            <div class="ai-radial-pct" style="color:#059669;" id="pct-preferences">0%</div>
+          </div>
+
+          <div class="ai-radial-card pos-left">
+            <div class="ai-radial-icon" style="color:var(--indigo);">▣</div>
+            <div class="ai-radial-body"><b>Products Scanned</b><span>Searching our catalog</span></div>
+            <div class="ai-radial-pct" style="color:var(--indigo);">12,340+</div>
+          </div>
+
+          <div class="ai-radial-card pos-right">
+            <div class="ai-radial-icon" style="color:#2563EB;">🛡</div>
+            <div class="ai-radial-body"><b>Compatibility</b><span>Checking product compatibility</span></div>
+            <div class="ai-radial-pct" style="color:#2563EB;" id="pct-compat">0%</div>
+          </div>
+
+          <div class="ai-radial-card pos-bl">
+            <div class="ai-radial-icon" style="color:#B45309;">▦</div>
+            <div class="ai-radial-body"><b>Categories</b><span>Matching relevant categories</span></div>
+            <div class="ai-radial-pct" style="color:#B45309;" id="pct-categories">0%</div>
+          </div>
+
+          <div class="ai-radial-card pos-br">
+            <div class="ai-radial-icon" style="color:#DB2777;">◔</div>
+            <div class="ai-radial-body"><b>User Signals</b><span>Analyzing behavior patterns</span></div>
+            <div class="ai-radial-pct" style="color:#DB2777;" id="pct-signals">0%</div>
+          </div>
+        </div>
       </div>
-      <div class="recommend-visual" aria-hidden="true">
-        <div class="recommend-orbit-ring"></div>
-        <div class="recommend-orb-center">🧠</div>
-        <div class="orbit-card pos-top is-active" id="rec-step-0">
-          <div class="orbit-card-head"><div class="orbit-card-icon" style="background:#ECFDF5;color:#047857;">✓</div><div class="orbit-card-title">Your Answers</div></div>
-          <div class="orbit-card-sub">Reading your consultation</div>
-          <div class="orbit-card-pct">0%</div>
+
+      <div class="ai-analyze-footer">
+        <div class="ai-analyze-status" id="recommend-status">Almost there! Generating the best matches for you&hellip;</div>
+        <div class="ai-analyze-bar-row">
+          <div class="prog-bar" style="background:var(--border);margin:0;flex:1;"><div class="prog-fill" id="loadProg" style="width:0%"></div></div>
+          <b id="loadPct">0%</b>
         </div>
-        <div class="orbit-card pos-right" id="rec-step-1">
-          <div class="orbit-card-head"><div class="orbit-card-icon" style="background:var(--indigo-soft);color:var(--indigo);">◆</div><div class="orbit-card-title">Compatibility</div></div>
-          <div class="orbit-card-sub">Checking product fit</div>
-          <div class="orbit-card-pct">0%</div>
-        </div>
-        <div class="orbit-card pos-bottom" id="rec-step-2">
-          <div class="orbit-card-head"><div class="orbit-card-icon" style="background:#FFFBEB;color:#B45309;">★</div><div class="orbit-card-title">Top Matches</div></div>
-          <div class="orbit-card-sub">Prioritising best fit</div>
-          <div class="orbit-card-pct">0%</div>
-        </div>
-        <div class="orbit-card pos-left" id="rec-step-3">
-          <div class="orbit-card-head"><div class="orbit-card-icon" style="background:#EEF2F7;color:#334155;">▤</div><div class="orbit-card-title">Usage Guide</div></div>
-          <div class="orbit-card-sub">Writing instructions</div>
-          <div class="orbit-card-pct">0%</div>
-        </div>
+        <div class="loader-time-note">🕐 Usually takes 30–60 seconds</div>
       </div>
     </div>
   `
@@ -1064,28 +1134,26 @@ function startRecommendationLoading(){
   if(body) body.innerHTML = recommendationLoadingMarkup()
 
   const statuses = [
-    'Analysing profile signals',
-    'Comparing product tags',
-    'Scoring catalog fit',
-    'Composing your routine',
-    'Final quality check'
+    'Almost there! Generating the best matches for you…',
+    'Comparing your answers with product tags…',
+    'Scoring every candidate for catalog fit…',
+    'Composing your personalised routine…',
+    'Running a final quality check…'
   ]
+  const cardTargets = { preferences: 75, compat: 68, categories: 54, signals: 82 }
+  let overall = 6
   let tick = 0
 
   const advance = () => {
-    const activeIndex = Math.min(3, Math.floor(tick / 2))
-    const overallPct = Math.min(96, Math.round(((tick + 1) / 10) * 100))
+    overall = Math.min(96, overall + 5 + Math.random() * 4)
+    const overallPct = Math.round(overall)
 
-    for(let i = 0; i < 4; i++){
-      const card = document.getElementById(`rec-step-${i}`)
-      if(!card) continue
-      const done = i < activeIndex
-      const active = i === activeIndex
-      card.classList.toggle('is-done', done)
-      card.classList.toggle('is-active', active)
-      const pctEl = card.querySelector('.orbit-card-pct')
-      if(pctEl) pctEl.textContent = (done ? 100 : active ? Math.min(95, 30 + tick * 12) : 0) + '%'
-    }
+    Object.keys(cardTargets).forEach(key => {
+      const target = cardTargets[key]
+      const cur = Math.min(target, Math.round((overall / 96) * target))
+      const el = document.getElementById('pct-' + key)
+      if(el) el.textContent = cur + '%'
+    })
 
     const status = document.getElementById('recommend-status')
     if(status) status.textContent = statuses[tick % statuses.length]
@@ -1098,7 +1166,7 @@ function startRecommendationLoading(){
   }
 
   advance()
-  recommendationLoaderTimer = setInterval(advance, 2400)
+  recommendationLoaderTimer = setInterval(advance, 1100)
 }
 
 function stopRecommendationLoading(){
